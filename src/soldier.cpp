@@ -4,13 +4,14 @@
 Soldier::Soldier()
 {
     image = LoadTexture("resources/soldier2.png");
-    position = { 50.0f, 1080.0f - (float)image.height - 80.0f }; // Start on ground
+    position = { 50.0f, 1080.0f - (float)image.height - 80 }; // Start on ground
     speed = 5;
     speedY = 0.0f;
     isJumping = false;
     isOnGround = false;
     isFallingThrough = false;
     fallingThroughTimer = 0.0f;
+    facingRight = true;
 }
 
 Soldier::~Soldier()
@@ -20,7 +21,21 @@ Soldier::~Soldier()
 
 void Soldier::Draw()
 {
-    DrawTextureV(image, position, WHITE);
+    Rectangle sourceRec = {
+        0, 
+        0, 
+        (float)image.width * (facingRight ? 1 : -1), 
+        (float)image.height
+    };
+    
+    Rectangle destRec = {
+        position.x,
+        position.y,
+        (float)image.width,
+        (float)image.height
+    };
+    
+    DrawTexturePro(image, sourceRec, destRec, {0, 0}, 0.0f, WHITE);
 }
 
 Rectangle Soldier::GetRect()
@@ -71,9 +86,11 @@ void Soldier::Update(const std::vector<Platform>& platforms)
     // Horizontal movement
     if(IsKeyDown(KEY_RIGHT) && position.x + image.width < screenWidth){
         position.x += speed;
+        facingRight = true;
     }
     else if(IsKeyDown(KEY_LEFT) && position.x > 0){
         position.x -= speed;
+        facingRight = false;
     }
 
     // Apply gravity

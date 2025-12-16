@@ -7,6 +7,7 @@ int main()
 {
     SetConfigFlags(FLAG_FULLSCREEN_MODE | FLAG_WINDOW_TOPMOST);
     InitWindow(1920, 1080, "Game");
+    HideCursor();
 
     // Get Monitor Dimensions
     int monitor = GetCurrentMonitor();
@@ -29,16 +30,26 @@ int main()
     int tileHeight = 24;
     int tileRow = 8;
     int tileCol = 12;
+    int groundHeight = 80;
 
     // Create platforms
     std::vector<Platform> platforms;
     
     // Ground platform (bottom of screen) - marked as ground so you can't fall through it
-    platforms.push_back(Platform(0, screenHeight - 80, screenWidth, 80, true));
+    platforms.push_back(Platform(0, screenHeight - groundHeight, screenWidth, groundHeight, true));
     
     // Additional platforms at different heights (not ground, so you can fall through them)
-    platforms.push_back(Platform(200, screenHeight - 200, 300, 40, false));
-    platforms.push_back(Platform(600, screenHeight - 400, 350, 40, false));
+    platforms.push_back(Platform(0, screenHeight - groundHeight - (160*1), 200, 40, false));
+    platforms.push_back(Platform(0, screenHeight - groundHeight - (160*2), 200, 40, false));
+    platforms.push_back(Platform(0, screenHeight - groundHeight - (160*3), 200, 40, false));
+    platforms.push_back(Platform(0, screenHeight - groundHeight - (160*4), 200, 40, false));
+
+    platforms.push_back(Platform(screenWidth - 200, screenHeight - groundHeight - (160*1), 200, 40, false));
+    platforms.push_back(Platform(screenWidth - 200, screenHeight - groundHeight - (160*2), 200, 40, false));
+    platforms.push_back(Platform(screenWidth - 200, screenHeight - groundHeight - (160*3), 200, 40, false));
+    platforms.push_back(Platform(screenWidth - 200, screenHeight - groundHeight - (160*4), 200, 40, false));
+
+    platforms.push_back(Platform(300, screenHeight - (160*5), screenWidth - 600, 40, false));
     platforms.push_back(Platform(1100, screenHeight - 300, 400, 40, false));
     platforms.push_back(Platform(300, screenHeight - 550, 250, 40, false));
 

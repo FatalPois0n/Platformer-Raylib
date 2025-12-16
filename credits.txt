@@ -1,5 +1,6 @@
 Graphics
 Areeba Ghafoor
-Brullov Art
+Brullov Art (bg and platforms assets)
+BDragon1727 (bullet assets)
 Developer
 Faizan Ali
