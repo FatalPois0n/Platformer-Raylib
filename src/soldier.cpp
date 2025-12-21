@@ -8,7 +8,7 @@ Soldier::Soldier()
     speed = 5;
     speedY = 0.0f;
     isJumping = false;
-    isOnGround = false;
+    isOnGround = true;
     isFallingThrough = false;
     fallingThroughTimer = 0.0f;
     facingRight = true;
@@ -49,6 +49,7 @@ bool Soldier::CheckPlatformCollision(const std::vector<Platform>& platforms)
     
     for (const auto& platform : platforms) {
         Rectangle platformRect = platform.GetRect();
+        standingOnGroundPlatform = false;
         
         // Skip collision if we're falling through platforms (but not ground)
         if (isFallingThrough && !platform.IsGround()) {
@@ -68,6 +69,9 @@ bool Soldier::CheckPlatformCollision(const std::vector<Platform>& platforms)
                 // Land on platform
                 position.y = platformTop - image.height;
                 speedY = 0.0f;
+                if (platform.IsGround()) {
+                    standingOnGroundPlatform = true;
+                }
                 return true;
             }
         }
@@ -106,7 +110,8 @@ void Soldier::Update(const std::vector<Platform>& platforms)
     }
 
     // Fall through platforms when pressing Down + X (only if on ground and not already falling through)
-    if (IsKeyPressed(KEY_X) && IsKeyDown(KEY_DOWN) && isOnGround && !isFallingThrough) {
+    if (IsKeyPressed(KEY_X) && IsKeyDown(KEY_DOWN) && isOnGround &&  !isFallingThrough) {
+        if(standingOnGroundPlatform) return; // Can't fall through ground platforms
         isFallingThrough = true;
         fallingThroughTimer = 0.5f; // Fall through for 0.5 seconds (increased for reliability)
         isOnGround = false;

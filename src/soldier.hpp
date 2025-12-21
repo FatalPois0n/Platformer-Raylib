@@ -20,6 +20,7 @@ private:
     bool isOnGround;
     bool isFallingThrough;
     float fallingThroughTimer;
+    bool standingOnGroundPlatform;
     bool facingRight;
     
     bool CheckPlatformCollision(const std::vector<Platform>& platforms);

@@ -1,29 +1,38 @@
 #include <raylib.h>
 #include <vector>
-#include "soldier.hpp"
+#include <string>
+#include "fighter.hpp"
 #include "platform.hpp"
+#include "animation.h"
+#include "mushroom.hpp"
+
 
 int main() 
 {
     SetConfigFlags(FLAG_FULLSCREEN_MODE | FLAG_WINDOW_TOPMOST);
     InitWindow(1920, 1080, "Game");
+
     HideCursor();
 
     // Get Monitor Dimensions
     int monitor = GetCurrentMonitor();
     int screenWidth = GetMonitorWidth(monitor);
     int screenHeight = GetMonitorHeight(monitor);
+
+    const Vector2 screenSize = { (float)screenWidth, (float)screenHeight };
     
     SetWindowSize(screenWidth, screenHeight);
     
     SetTargetFPS(60);
+
     
     Texture2D background = LoadTexture("resources/background/background_layer_1.png");
     Texture2D midground = LoadTexture("resources/background/background_layer_2.png");
     Texture2D foreground = LoadTexture("resources/background/background_layer_3.png");
     Texture2D tileset = LoadTexture("resources/oak_woods_tileset.png");
 
-    Soldier soldier;
+    Fighter fighter;
+    Mushroom mushroom;
     
     // Define tile properties
     int tileWidth = 24;
@@ -35,10 +44,10 @@ int main()
     // Create platforms
     std::vector<Platform> platforms;
     
-    // Ground platform (bottom of screen) - marked as ground so you can't fall through it
+    // Ground platform (bottom of screen) - marked as ground
     platforms.push_back(Platform(0, screenHeight - groundHeight, screenWidth, groundHeight, true));
     
-    // Additional platforms at different heights (not ground, so you can fall through them)
+    // Additional platforms at different heights (not ground)
     platforms.push_back(Platform(0, screenHeight - groundHeight - (160*1), 200, 40, false));
     platforms.push_back(Platform(0, screenHeight - groundHeight - (160*2), 200, 40, false));
     platforms.push_back(Platform(0, screenHeight - groundHeight - (160*3), 200, 40, false));
@@ -54,9 +63,20 @@ int main()
     platforms.push_back(Platform(300, screenHeight - 550, 250, 40, false));
 
     // Game loop
-    while(WindowShouldClose() == false){
+    while(!WindowShouldClose()){
         // Update
-        soldier.Update(platforms);
+        fighter.Update(platforms);
+        fighter.characterDeath(mushroom);
+        if(!mushroom.IsDead())
+            mushroom.Update(platforms, fighter);
+        // Check if fighter is attacking and deal damage
+        if (fighter.IsAttacking()) {
+            if (fighter.comboAttack) {
+                fighter.PerformComboSlash(mushroom);
+            } else {
+                fighter.PerformSlash(mushroom);
+            }
+        }
 
         // Drawing
         BeginDrawing();
@@ -94,10 +114,28 @@ int main()
         for (auto& platform : platforms) {
             platform.Draw(tileset, tileWidth, tileHeight, tileRow, tileCol);
         }
+
+        //drawing all the text
+        std::string livesCount = "Lives: " + std::to_string(fighter.lives);
+        std::string invin = "Invincibility timer: " + std::to_string(fighter.invincibilityTimer);
+
+        float fontSize = 32.0f;
+        float fontSpacing = 3.0f;
+
+        Font fnt_chewy = LoadFontEx("resources/fonts/Chewy.ttf", fontSize, 0, 0);
+
+        Vector2 textSize1 = MeasureTextEx(fnt_chewy, livesCount.c_str(), fontSize, fontSpacing);
+        Vector2 textSize2 = MeasureTextEx(fnt_chewy, invin.c_str(), fontSize, fontSpacing);
+        Vector2 textPosition1 = { textSize1.x + 20.0f, 20.0f };
+        Vector2 textPosition2 = { screenWidth - 400.0f, 20.0f };
+    
+        DrawTextEx(fnt_chewy, livesCount.c_str(), textPosition1, fontSize, fontSpacing, WHITE);
+        DrawTextEx(fnt_chewy, invin.c_str(), textPosition2, fontSize, fontSpacing, WHITE);
         
-        // Draw soldier
-        soldier.Draw();
-        
+        // Draw Character and enemies
+        fighter.Draw(mushroom);
+        if(!mushroom.IsDead())
+            mushroom.Draw();
         EndDrawing();
     }
 
