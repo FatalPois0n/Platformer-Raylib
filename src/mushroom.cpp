@@ -8,9 +8,27 @@ static AnimDef MUSHROOM_IDLE  = {1, 0, 6, 8};
 static AnimDef MUSHROOM_DIE   = {2, 0, 6, 10};
 static AnimDef MUSHROOM_HURT  = {3, 0, 3, 10}; 
 
+// Initialize static texture
+Texture2D Mushroom::sharedAtlas = {0};
+
+void Mushroom::LoadSharedTexture()
+{
+    if (sharedAtlas.id == 0) {
+        sharedAtlas = LoadTexture("resources/enemies/mushroom/mushroom_spritesheet.png");
+    }
+}
+
+void Mushroom::UnloadSharedTexture()
+{
+    if (sharedAtlas.id != 0) {
+        UnloadTexture(sharedAtlas);
+        sharedAtlas = {0};
+    }
+}
+
 Mushroom::Mushroom()
 {
-    atlas = LoadTexture("resources/enemies/mushroom/mushroom_spritesheet.png");
+    LoadSharedTexture();
 
     textureWidth  = 16;
     textureHeight = 16;
@@ -19,12 +37,12 @@ Mushroom::Mushroom()
 
     atlasInfo.frameWidth  = textureWidth;
     atlasInfo.frameHeight = textureHeight;
-    atlasInfo.columns     = atlas.width / textureWidth;
+    atlasInfo.columns     = sharedAtlas.width / textureWidth;
 
-    idleAnim = LoadAnim(MUSHROOM_IDLE, atlas, atlasInfo, offsetX, offsetY, true);
-    walkAnim = LoadAnim(MUSHROOM_WALK, atlas, atlasInfo, offsetX, offsetY, true);
-    hurtAnim = LoadAnim(MUSHROOM_HURT, atlas, atlasInfo, offsetX, offsetY, false);
-    dieAnim  = LoadAnim(MUSHROOM_DIE,  atlas, atlasInfo, offsetX, offsetY, false);
+    idleAnim = LoadAnim(MUSHROOM_IDLE, sharedAtlas, atlasInfo, offsetX, offsetY, true);
+    walkAnim = LoadAnim(MUSHROOM_WALK, sharedAtlas, atlasInfo, offsetX, offsetY, true);
+    hurtAnim = LoadAnim(MUSHROOM_HURT, sharedAtlas, atlasInfo, offsetX, offsetY, false);
+    dieAnim  = LoadAnim(MUSHROOM_DIE,  sharedAtlas, atlasInfo, offsetX, offsetY, false);
 
     // Place on ground 
     position = { 600.0f, (float)GetScreenHeight() - 300.0f };
@@ -33,13 +51,54 @@ Mushroom::Mushroom()
     width  = (int)(textureWidth  * scale);
     height = (int)(textureHeight * scale);
 
-    speed     = 3;   
+    speed     = 2.5;   
     speedY    = 0.0f;
     isOnGround = false;
     facingRight = true;
 
     // Health initialization
-    maxHealth = 100.0f;
+    maxHealth = 50.0f;
+    health = maxHealth;
+    isDying = false;
+    hurtTimer = 0.0f;
+
+    state = State::Idle;
+    lastState = State::Idle;
+    animationStartTime = GetTime();
+}
+
+Mushroom::Mushroom(Vector2 startPos)
+{
+    LoadSharedTexture();
+
+    textureWidth  = 16;
+    textureHeight = 16;
+    offsetX = 0.0f;
+    offsetY = 0.0f;
+
+    atlasInfo.frameWidth  = textureWidth;
+    atlasInfo.frameHeight = textureHeight;
+    atlasInfo.columns     = sharedAtlas.width / textureWidth;
+
+    idleAnim = LoadAnim(MUSHROOM_IDLE, sharedAtlas, atlasInfo, offsetX, offsetY, true);
+    walkAnim = LoadAnim(MUSHROOM_WALK, sharedAtlas, atlasInfo, offsetX, offsetY, true);
+    hurtAnim = LoadAnim(MUSHROOM_HURT, sharedAtlas, atlasInfo, offsetX, offsetY, false);
+    dieAnim  = LoadAnim(MUSHROOM_DIE,  sharedAtlas, atlasInfo, offsetX, offsetY, false);
+
+    // Use provided starting position
+    position = startPos;
+
+    scale  = 5.0f;
+    width  = (int)(textureWidth  * scale);
+    height = (int)(textureHeight * scale);
+
+    speed     = 2.5;   
+    speedY    = 0.0f;
+    isOnGround = false;
+    facingRight = true;
+
+    // Health initialization
+    maxHealth = 50.0f;
     health = maxHealth;
     isDying = false;
     hurtTimer = 0.0f;
@@ -55,7 +114,7 @@ Mushroom::~Mushroom()
     DisposeSpriteAnimation(walkAnim);
     DisposeSpriteAnimation(hurtAnim);
     DisposeSpriteAnimation(dieAnim);
-    UnloadTexture(atlas);
+    // Do not unload shared texture - managed by LoadSharedTexture/UnloadSharedTexture
 }
 
 void Mushroom::SetState(State newState)

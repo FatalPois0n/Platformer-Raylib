@@ -3,22 +3,21 @@
 #include <vector>
 #include "platform.hpp"
 #include "animation.h"
-
-// Forward declaration to avoid circular dependency
-class Mushroom;
+#include "enemy.hpp"
 
 class Fighter {
     public:
     Fighter();
     ~Fighter();
+    void Reset();
     void Update(const std::vector<Platform>& platforms);
-    void Draw(const Mushroom& enemy);
+    void Draw();
     Rectangle GetRect() const;
     Rectangle GetCollisionRect();
     Rectangle GetAttackHitbox() const;
-    void characterDeath(const Mushroom& enemy);
-    void PerformSlash(Mushroom& enemy);
-    void PerformComboSlash(Mushroom& enemy);
+    void characterDeath(const std::vector<Enemy*>& enemies);
+    void PerformSlash(Enemy& enemy);
+    void PerformComboSlash(Enemy& enemy);
     bool IsAttacking() const { return isAttacking || comboAttack; }
     int lives;
     float invincibilityTimer;
@@ -70,6 +69,7 @@ class Fighter {
     float baseDamage;
     float comboDamage;
     bool hasDealtDamage; // Track if damage was dealt this attack to prevent multiple hits
+    float attackHitboxDelay; // Delay before attack hitbox becomes active (1 second)
     
     bool CheckPlatformCollision(const std::vector<Platform>& platforms);
 };

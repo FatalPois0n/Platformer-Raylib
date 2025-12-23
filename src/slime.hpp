@@ -8,15 +8,11 @@
 // Forward declaration to avoid circular dependency
 class Fighter;
 
-class Mushroom : public Enemy {
+class Slime : public Enemy {
 public:
-    Mushroom();
-    Mushroom(Vector2 startPos);
-    virtual ~Mushroom() override;
-
-    // Static texture management
-    static void LoadSharedTexture();
-    static void UnloadSharedTexture();
+    Slime();
+    Slime(Vector2 startPos);
+    virtual ~Slime() override;
 
     // Override Enemy interface
     void Update(const std::vector<Platform>& platforms, const Fighter& player) override;
@@ -28,7 +24,7 @@ public:
     
 private:
     // Textures & animations
-    static Texture2D sharedAtlas;
+    Texture2D atlas;
     AtlasInfo atlasInfo;
     spriteAnimation idleAnim;
     spriteAnimation walkAnim;
@@ -49,7 +45,13 @@ private:
     int speed;
     float speedY;
     bool isOnGround;
-    bool facingRight;
+    bool facingLeft;
+    int moveDir;           // -1 left, +1 right
+    float directionTimer;  // time until we reconsider direction
+    float jumpCooldown;    // delay between jumps
+    bool isFallingThrough; // falling through platforms
+    float fallingThroughTimer; // duration of fall-through
+    bool standingOnGroundPlatform; // track if on ground platform
 
     // Health
     float health;
