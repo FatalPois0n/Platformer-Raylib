@@ -5,20 +5,14 @@
 #include "animation.h"
 #include "enemy.hpp"
 
-// Forward declaration to avoid circular dependency
-class Fighter;
+class Fighter; // forward declaration
 
-class Mushroom : public Enemy {
+class Boss:public Enemy{
 public:
-    Mushroom();
-    Mushroom(Vector2 startPos);
-    virtual ~Mushroom() override;
-
-    // Static texture management
-    static void LoadSharedTexture();
-    static void UnloadSharedTexture();
-
-    // Override Enemy interface
+    Boss();
+    explicit Boss(Vector2 startPos);
+    virtual ~Boss() override;
+    // Enemy interface
     void Update(const std::vector<Platform>& platforms, const std::vector<Wall>& walls, const Fighter& player) override;
     void Draw() override;
     Rectangle GetRect() const override;
@@ -26,48 +20,50 @@ public:
     void TakeDamage(float damageAmount) override;
     bool IsDead() const override { return isDeadFinal; }
     float GetHealth() const override { return health; }
-    
+    void LoadSharedTexture();
+    void UnloadSharedTexture();
+
 private:
-    // Textures & animations
     static Texture2D sharedAtlas;
     AtlasInfo atlasInfo;
-    spriteAnimation idleAnim;
-    spriteAnimation walkAnim;
+    spriteAnimation attack1Anim;
+    spriteAnimation castAnim;
+    spriteAnimation spellAnim;
     spriteAnimation hurtAnim;
     spriteAnimation dieAnim;
+    spriteAnimation idleAnim;
+    spriteAnimation walkAnim;
 
-    // Geometry
-    Vector2 position;
-    float scale;
-    int width;
-    int height;
     int textureWidth;
     int textureHeight;
     float offsetX;
     float offsetY;
 
-    // Movement/physics
+    Vector2 position;
+    float scale;
+    int width;
+    int height;
     int speed;
     float speedY;
     bool isOnGround;
     bool facingRight;
-    bool hasPlatformSupport;
-    Rectangle currentPlatformRect;
+    Rectangle playerRectCache;
 
-    // Health
-    float health;
+
     float maxHealth;
+    float health;
+    bool isFallingThrough;
+    float fallingThroughTimer;
+    bool isJumping;
+    bool isLanding;
     bool isDying;
     bool isDeadFinal;
-    float hurtTimer;
 
-    // State
-    enum class State { Idle, Walk, Hurt, Die };
+    enum class State { Idle, Walk, Hurt, Die, Attack1, Cast, Spell};
     State state;
     State lastState;
     float animationStartTime;
 
-    // Internals
-    bool CheckPlatformCollision(const std::vector<Platform>& platforms);
     void SetState(State newState);
+    bool CheckPlatformCollision(const std::vector<Platform>& platforms);
 };

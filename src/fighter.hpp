@@ -4,18 +4,20 @@
 #include "platform.hpp"
 #include "animation.h"
 #include "enemy.hpp"
+#include "huntress.hpp"
 
 class Fighter {
     public:
     Fighter();
     ~Fighter();
     void Reset();
-    void Update(const std::vector<Platform>& platforms);
+    void resetPos();
+    void Update(const std::vector<Platform>& platforms, const std::vector<Wall>& walls);
     void Draw();
     Rectangle GetRect() const;
-    Rectangle GetCollisionRect();
+    Rectangle GetHitbox() const;
     Rectangle GetAttackHitbox() const;
-    void characterDeath(const std::vector<Enemy*>& enemies);
+    void characterDeath(const std::vector<Enemy*>& enemies, const std::vector<Spear>& spears);
     void PerformSlash(Enemy& enemy);
     void PerformComboSlash(Enemy& enemy);
     bool IsAttacking() const { return isAttacking || comboAttack; }
@@ -41,8 +43,6 @@ class Fighter {
     float scale;
     int width;
     int height;
-    float offsetX;
-    float offsetY;
     float textureWidth;
     float textureHeight;
     int speed;
@@ -56,6 +56,7 @@ class Fighter {
     bool isFallingThrough;
     float fallingThroughTimer;
     bool standingOnGroundPlatform;
+    bool standingOnWallTop;
     bool facingRight;
     bool isAttacking;
     bool isRunning;
@@ -72,4 +73,5 @@ class Fighter {
     float attackHitboxDelay; // Delay before attack hitbox becomes active (1 second)
     
     bool CheckPlatformCollision(const std::vector<Platform>& platforms);
+    bool CheckWallCollision(const std::vector<Wall>& walls);
 };

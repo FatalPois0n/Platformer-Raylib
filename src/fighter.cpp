@@ -9,38 +9,37 @@ Fighter::Fighter()
     fighterSet1 = LoadTexture("resources/char_red_1.png");
     fighterSet2 = LoadTexture("resources/char_red_2.png");
     frameCount = 6;
-    offsetX = 15;
-    offsetY = 20;
     textureWidth = 56;
     textureHeight = 56;
     atlas.frameWidth = textureWidth;
     atlas.frameHeight = textureHeight;
     atlas.columns = fighterSet1.width / textureWidth;
-    idleAnimation = LoadAnim(idle, fighterSet1, atlas, offsetX, offsetY, true);
-    runAnimation = LoadAnim(run, fighterSet1, atlas, offsetX, offsetY, true);
-    jumpAnimation = LoadAnim(jump, fighterSet1, atlas, offsetX, offsetY, false);
-    landAnimation = LoadAnim(land, fighterSet1, atlas, offsetX, offsetY, false);
-    deathAnimation = LoadAnim(death, fighterSet1, atlas, offsetX, offsetY, false);
-    crouchAnimation = LoadAnim(crouch, fighterSet1, atlas, offsetX, offsetY, false);
-    attackAnimation = LoadAnim(attack, fighterSet1, atlas, offsetX, offsetY, false);
-    comboAnimation = LoadAnim(combo, fighterSet1, atlas, offsetX, offsetY, false);
+    idleAnimation = LoadAnim(idle, fighterSet1, atlas, true);
+    runAnimation = LoadAnim(run, fighterSet1, atlas, true);
+    jumpAnimation = LoadAnim(jump, fighterSet1, atlas, false);
+    landAnimation = LoadAnim(land, fighterSet1, atlas, false);
+    deathAnimation = LoadAnim(death, fighterSet1, atlas, false);
+    crouchAnimation = LoadAnim(crouch, fighterSet1, atlas, false);
+    attackAnimation = LoadAnim(attack, fighterSet1, atlas, false);
+    comboAnimation = LoadAnim(combo, fighterSet1, atlas, false);
 
     attackDuration = (float)attackAnimation.rectanglesCount / (float)attackAnimation.framesPerSecond;
     comboDuration = (float)comboAnimation.rectanglesCount / (float)comboAnimation.framesPerSecond;
-    attackCooldown = 0.45f;
+    attackCooldown = 0.40f;
     nextAttackReadyTime = 0.0f;
 
     startingPosition = {50.0f, 1080.0f - 80 - 200.0f}; // Start on ground
     position = startingPosition;                       // manipulatable position vector
-    scale = 2.5;
-    width = (textureWidth * scale - 2 * offsetX);
-    height = (textureHeight * scale - offsetY);
+    scale = 3.5;
+    width = (textureWidth * scale);
+    height = (textureHeight * scale);
     speed = 5;
     speedY = 0.0f;
     animationStartTime = 0.0f;
     isOnGround = true;
     isFallingThrough = false;
     fallingThroughTimer = 0.0f;
+    standingOnWallTop = false;
     facingRight = true;
     isAttacking = false;
     comboAttack = false;
@@ -100,6 +99,11 @@ void Fighter::Reset()
     hasDealtDamage = false;
 }
 
+void Fighter::resetPos()
+{
+    position = startingPosition;
+}
+
 Rectangle Fighter::GetAttackHitbox() const
 {
     // Attack hitbox extends in front of the player
@@ -120,7 +124,7 @@ void Fighter::PerformSlash(Enemy& enemy)
     if (elapsedTime < attackHitboxDelay) return; // Hitbox not active yet
     
     Rectangle attackBox = GetAttackHitbox();
-    Rectangle enemyBox = enemy.GetRect();
+    Rectangle enemyBox = enemy.GetHitbox();
     
     if (CheckCollisionRecs(attackBox, enemyBox) && !enemy.IsDead()) {
         enemy.TakeDamage(baseDamage);
@@ -137,7 +141,7 @@ void Fighter::PerformComboSlash(Enemy& enemy)
     if (elapsedTime < attackHitboxDelay) return; // Hitbox not active yet
     
     Rectangle attackBox = GetAttackHitbox();
-    Rectangle enemyBox = enemy.GetRect();
+    Rectangle enemyBox = enemy.GetHitbox();
 
     if (CheckCollisionRecs(attackBox, enemyBox) && !enemy.IsDead())
     {
@@ -148,6 +152,7 @@ void Fighter::PerformComboSlash(Enemy& enemy)
 
 void Fighter::Draw()
 {
+    DrawRectangleLinesEx(GetHitbox(), 1.0f, RED); // Debug: draw hitbox
     float elapsedTime = GetTime() - animationStartTime;
 
     if (isDying)
@@ -201,25 +206,33 @@ Rectangle Fighter::GetRect() const
         float crouchOffsetY = height - crouchHeight; // keep feet planted
         return Rectangle{position.x, position.y + crouchOffsetY, (float)width, crouchHeight};
     }
-    // if (isJumping) {
-    //     // height is increased when jumping (120% of normal height)
-    //     float jumpHeight = height * 1.2f;
-    //     float jumpWidth = width * 1.2f;
-    //     float jumpOffsetY = height - jumpHeight; // keep feet planted
-    //     return Rectangle{position.x, position.y + jumpOffsetY, (float)jumpWidth, jumpHeight};
-    // }
     return Rectangle{position.x, position.y, (float)width, (float)height};
 }
 
-Rectangle Fighter::GetCollisionRect()
+Rectangle Fighter::GetHitbox() const
 {
     // Use full standing height for collision to avoid flicker/jitter when crouching
-    return Rectangle{position.x, position.y, (float)width, (float)height};
+    float offsetX = 55.0f;
+    float offsetY = 75.0f;
+    float x = position.x + offsetX;
+    float y = position.y + offsetY;
+    float w = (float)width - offsetX*2;
+    float h = (float)height - offsetY;
+    if(isCrouching)
+    {
+        // Adjust y to account for crouching height difference
+        float crouchHeight = h * 0.9f;
+        float crouchOffsetY = h - crouchHeight;
+        y += crouchOffsetY;
+        h = crouchHeight;
+    }
+    
+    return Rectangle{x, y, w, h};
 }
 
 bool Fighter::CheckPlatformCollision(const std::vector<Platform> &platforms)
 {
-    Rectangle fighterRect = GetCollisionRect();
+    Rectangle fighterRect = GetHitbox();
     standingOnGroundPlatform = false;
 
     for (const auto &platform : platforms)
@@ -258,8 +271,74 @@ bool Fighter::CheckPlatformCollision(const std::vector<Platform> &platforms)
 
     return false;
 }
+bool Fighter::CheckWallCollision(const std::vector<Wall> &walls)
+{
+    Rectangle fighterRect = GetHitbox();
+    // Reset wall-top state each frame before checking
+    standingOnWallTop = false;
 
-void Fighter::characterDeath(const std::vector<Enemy*>& enemies)
+    for (const auto &wall : walls)
+    {
+        Rectangle wallRect = wall.GetRect();
+        
+        // Check if fighter can stand on top of the wall
+        if (wall.CanStandOnTop() && speedY >= 0)
+        {
+            // Check horizontal overlap
+            if (fighterRect.x + fighterRect.width > wallRect.x && 
+                fighterRect.x < wallRect.x + wallRect.width)
+            {
+                float fighterBottom = fighterRect.y + fighterRect.height;
+                float wallTop = wallRect.y;
+                
+                // Check if fighter is landing on top of wall
+                if (fighterBottom >= wallTop && fighterBottom <= wallTop + 20.0f)
+                {
+                    position.y = wallTop - height;
+                    speedY = 0.0f;
+                    standingOnWallTop = true;
+                }
+            }
+        }
+        
+        // Check horizontal collision (blocks left/right movement)
+        if (wall.BlocksMovement())
+        {
+            // Check vertical overlap (fighter and wall are at same height)
+            float fighterTop = fighterRect.y;
+            float fighterBottom = fighterRect.y + fighterRect.height;
+            float wallTop = wallRect.y;
+            float wallBottom = wallRect.y + wallRect.height;
+            
+            // Only block horizontal movement if there's vertical overlap
+            if (fighterBottom > wallTop + 10.0f && fighterTop < wallBottom - 10.0f)
+            {
+                float fighterLeft = fighterRect.x;
+                float fighterRight = fighterRect.x + fighterRect.width;
+                float wallLeft = wallRect.x;
+                float wallRight = wallRect.x + wallRect.width;
+                
+                // Check collision from the right (fighter moving left into wall)
+                if (fighterLeft < wallRight && fighterLeft > wallLeft)
+                {
+                    position.x = wallRight;
+                    return true;
+                }
+                
+                // Check collision from the left (fighter moving right into wall)
+                if (fighterRight > wallLeft && fighterRight < wallRight)
+                {
+                    position.x = wallLeft - width;
+                    return true;
+                }
+            }
+        }
+    }
+
+    return standingOnWallTop;
+}
+
+void Fighter::characterDeath(const std::vector<Enemy*>& enemies, const std::vector<Spear>& spears)
 {
     float deltaTime = GetFrameTime();
     
@@ -270,8 +349,8 @@ void Fighter::characterDeath(const std::vector<Enemy*>& enemies)
         // After 2 seconds, respawn the player
         if (deathTimer >= 2.0f) {
             // Respawn at starting position
-            width = (textureWidth * scale - 2 * offsetX);
-            height = (textureHeight * scale - offsetY);
+            // width = (textureWidth * scale - 2 * offsetX);
+            // height = (textureHeight * scale - offsetY);
             position = startingPosition;
             speedY = 0.0f;
             isDying = false;
@@ -291,8 +370,8 @@ void Fighter::characterDeath(const std::vector<Enemy*>& enemies)
                 continue;
             }
 
-            Rectangle a = GetRect();
-            Rectangle b = enemy->GetRect();
+            Rectangle a = GetHitbox();
+            Rectangle b = enemy->GetHitbox();
             
             if (CheckCollisionRecs(a, b)) {
                 // Collision detected - trigger death
@@ -300,6 +379,26 @@ void Fighter::characterDeath(const std::vector<Enemy*>& enemies)
                 width = textureWidth * scale;
                 height = textureHeight * scale;
                 deathTimer = 0.0f;
+                animationStartTime = GetTime(); // start death animation from frame 0
+                lives -= 1;
+                break; // Only take damage once per frame
+            }
+        }
+        for (const auto& spear : spears) {
+            if (spear.alive == false) {
+                continue;
+            }
+
+            Rectangle a = GetHitbox();
+            Rectangle b = spear.GetRect();
+            
+            if (CheckCollisionRecs(a, b)) {
+                // Collision detected - trigger death
+                isDying = true;
+                width = textureWidth * scale;
+                height = textureHeight * scale;
+                deathTimer = 0.0f;
+                animationStartTime = GetTime(); // start death animation from frame 0
                 lives -= 1;
                 break; // Only take damage once per frame
             }
@@ -308,7 +407,7 @@ void Fighter::characterDeath(const std::vector<Enemy*>& enemies)
 
 }
 
-void Fighter::Update(const std::vector<Platform> &platforms)
+void Fighter::Update(const std::vector<Platform> &platforms, const std::vector<Wall> &walls)
 {
     const int screenWidth = GetScreenWidth();
     const int screenHeight = GetScreenHeight();
@@ -343,13 +442,23 @@ void Fighter::Update(const std::vector<Platform> &platforms)
     {
         if (IsKeyDown(KEY_RIGHT) && position.x + width < screenWidth)
         {
+            Vector2 oldPos = position;
             position.x += speed;
+            // Check wall collision and revert if colliding
+            if (CheckWallCollision(walls)) {
+                // Position already adjusted by CheckWallCollision
+            }
             facingRight = true;
             isRunning = true;
         }
         else if (IsKeyDown(KEY_LEFT) && position.x > 0)
         {
+            Vector2 oldPos = position;
             position.x -= speed;
+            // Check wall collision and revert if colliding
+            if (CheckWallCollision(walls)) {
+                // Position already adjusted by CheckWallCollision
+            }
             facingRight = false;
             isRunning = true;
         }
@@ -390,8 +499,9 @@ void Fighter::Update(const std::vector<Platform> &platforms)
     // Fall through platforms when pressing Down + X (only if on ground and not already falling through)
     if (IsKeyPressed(KEY_X) && IsKeyDown(KEY_DOWN) && isOnGround && !isFallingThrough)
     {
-        if (standingOnGroundPlatform)
-            return; // Can't fall through ground platforms
+        // Prevent falling through walls (and ground) when on top of them
+        if (standingOnGroundPlatform || standingOnWallTop)
+            return; // Can't fall through ground platforms or wall tops
         isFallingThrough = true;
         isLanding = true;
         fallingThroughTimer = 0.5f; // Fall through for 0.5 seconds (increased for reliability)
@@ -410,10 +520,14 @@ void Fighter::Update(const std::vector<Platform> &platforms)
     // Update vertical position
     position.y += speedY * deltaTime;
 
-    // Check platform collisions (only if not falling through)
+    // Check platform and wall collisions (only if not falling through)
     if (!isFallingThrough)
     {
         isOnGround = CheckPlatformCollision(platforms);
+        // Also check if standing on top of a wall
+        if (!isOnGround) {
+            isOnGround = CheckWallCollision(walls);
+        }
     }
     else
     {

@@ -15,11 +15,12 @@ public:
     virtual ~Slime() override;
 
     // Override Enemy interface
-    void Update(const std::vector<Platform>& platforms, const Fighter& player) override;
+    void Update(const std::vector<Platform>& platforms, const std::vector<Wall>& walls, const Fighter& player) override;
     void Draw() override;
     Rectangle GetRect() const override;
+    Rectangle GetHitbox() const override;
     void TakeDamage(float damageAmount) override;
-    bool IsDead() const override { return health <= 0; }
+    bool IsDead() const override { return isDeadFinal; }
     float GetHealth() const override { return health; }
     
 private:
@@ -57,6 +58,7 @@ private:
     float health;
     float maxHealth;
     bool isDying;
+    bool isDeadFinal;
     float hurtTimer;
 
     // State

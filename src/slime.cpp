@@ -21,10 +21,10 @@ Slime::Slime()
     atlasInfo.frameHeight = textureHeight;
     atlasInfo.columns     = atlas.width / textureWidth;
 
-    walkAnim = LoadAnim(SLIME_WALK, atlas, atlasInfo, offsetX, offsetY, true);
-    dieAnim  = LoadAnim(SLIME_DIE,  atlas, atlasInfo, offsetX, offsetY, false);
-    idleAnim = LoadAnim(SLIME_IDLE, atlas, atlasInfo, offsetX, offsetY, true);
-    hurtAnim = LoadAnim(SLIME_HURT, atlas, atlasInfo, offsetX, offsetY, false);
+    walkAnim = LoadAnim(SLIME_WALK, atlas, atlasInfo, true);
+    dieAnim  = LoadAnim(SLIME_DIE,  atlas, atlasInfo, false);
+    idleAnim = LoadAnim(SLIME_IDLE, atlas, atlasInfo, true);
+    hurtAnim = LoadAnim(SLIME_HURT, atlas, atlasInfo, false);
 
     // Place on ground 
     position = { 600.0f, (float)GetScreenHeight() - 300.0f };
@@ -48,6 +48,7 @@ Slime::Slime()
     maxHealth = 100.0f;
     health = maxHealth;
     isDying = false;
+    isDeadFinal = false;
     hurtTimer = 0.0f;
 
     state = State::Idle;
@@ -68,10 +69,10 @@ Slime::Slime(Vector2 startPos)
     atlasInfo.frameHeight = textureHeight;
     atlasInfo.columns     = atlas.width / textureWidth;
 
-    walkAnim = LoadAnim(SLIME_WALK, atlas, atlasInfo, offsetX, offsetY, true);
-    dieAnim  = LoadAnim(SLIME_DIE,  atlas, atlasInfo, offsetX, offsetY, false);
-    idleAnim = LoadAnim(SLIME_IDLE, atlas, atlasInfo, offsetX, offsetY, true);
-    hurtAnim = LoadAnim(SLIME_HURT, atlas, atlasInfo, offsetX, offsetY, false);
+    walkAnim = LoadAnim(SLIME_WALK, atlas, atlasInfo, true);
+    dieAnim  = LoadAnim(SLIME_DIE,  atlas, atlasInfo, false);
+    idleAnim = LoadAnim(SLIME_IDLE, atlas, atlasInfo, true);
+    hurtAnim = LoadAnim(SLIME_HURT, atlas, atlasInfo, false);
 
     // Use provided starting position
     position = startPos;
@@ -95,6 +96,7 @@ Slime::Slime(Vector2 startPos)
     maxHealth = 50.0f;
     health = maxHealth;
     isDying = false;
+    isDeadFinal = false;
     hurtTimer = 0.0f;
 
     state = State::Idle;
@@ -140,6 +142,10 @@ Rectangle Slime::GetRect() const
 {
     return Rectangle{ position.x, position.y, (float)width, (float)height };
 }
+Rectangle Slime::GetHitbox() const
+{
+    return Rectangle{ position.x, position.y, (float)width, (float)height };
+}
 
 bool Slime::CheckPlatformCollision(const std::vector<Platform>& platforms)
 {
@@ -177,7 +183,7 @@ bool Slime::CheckPlatformCollision(const std::vector<Platform>& platforms)
     return grounded;
 }
 
-void Slime::Update(const std::vector<Platform>& platforms, const Fighter& player)
+void Slime::Update(const std::vector<Platform>& platforms, const std::vector<Wall>& walls, const Fighter& player)
 {
     const float GRAVITY = 800.0f;
     const float JUMP_VELOCITY = -600.0f;
@@ -211,8 +217,8 @@ void Slime::Update(const std::vector<Platform>& platforms, const Fighter& player
     if (isDying) {
         float dieAnimDuration = (float)dieAnim.rectanglesCount / (float)dieAnim.framesPerSecond;
         if (GetTime() - animationStartTime >= dieAnimDuration) {
-            //removing enemy
-            
+            // mark fully dead after death animation finishes
+            isDeadFinal = true;
         }
         return;
     }
@@ -357,7 +363,4 @@ void Slime::Draw()
             DrawSpriteAnimationPro(dieAnim, dest, origin, 0.0f, WHITE, facingLeft, elapsed);
             break;
     }
-
-    // Debug: visualize slime hitbox
-    DrawRectangleLinesEx(dest, 2, BLUE);
 }

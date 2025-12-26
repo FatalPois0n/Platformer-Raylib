@@ -2,6 +2,13 @@
 #include "fighter.hpp"
 #include <raylib.h>
 #include <cmath>
+#include <algorithm>
+
+// clamp function for C++14 compatibility
+template<typename T>
+T clamp(T value, T min_val, T max_val) {
+    return std::max(min_val, std::min(value, max_val));
+}
 
 static AnimDef MUSHROOM_WALK  = {0, 0, 8, 10}; 
 static AnimDef MUSHROOM_IDLE  = {1, 0, 6, 8};  
@@ -39,10 +46,10 @@ Mushroom::Mushroom()
     atlasInfo.frameHeight = textureHeight;
     atlasInfo.columns     = sharedAtlas.width / textureWidth;
 
-    idleAnim = LoadAnim(MUSHROOM_IDLE, sharedAtlas, atlasInfo, offsetX, offsetY, true);
-    walkAnim = LoadAnim(MUSHROOM_WALK, sharedAtlas, atlasInfo, offsetX, offsetY, true);
-    hurtAnim = LoadAnim(MUSHROOM_HURT, sharedAtlas, atlasInfo, offsetX, offsetY, false);
-    dieAnim  = LoadAnim(MUSHROOM_DIE,  sharedAtlas, atlasInfo, offsetX, offsetY, false);
+    idleAnim = LoadAnim(MUSHROOM_IDLE, sharedAtlas, atlasInfo, true);
+    walkAnim = LoadAnim(MUSHROOM_WALK, sharedAtlas, atlasInfo, true);
+    hurtAnim = LoadAnim(MUSHROOM_HURT, sharedAtlas, atlasInfo, false);
+    dieAnim  = LoadAnim(MUSHROOM_DIE,  sharedAtlas, atlasInfo, false);
 
     // Place on ground 
     position = { 600.0f, (float)GetScreenHeight() - 300.0f };
@@ -54,12 +61,15 @@ Mushroom::Mushroom()
     speed     = 2.5;   
     speedY    = 0.0f;
     isOnGround = false;
+    hasPlatformSupport = false;
+    currentPlatformRect = {0, 0, 0, 0};
     facingRight = true;
 
     // Health initialization
     maxHealth = 50.0f;
     health = maxHealth;
     isDying = false;
+    isDeadFinal = false;
     hurtTimer = 0.0f;
 
     state = State::Idle;
@@ -80,10 +90,10 @@ Mushroom::Mushroom(Vector2 startPos)
     atlasInfo.frameHeight = textureHeight;
     atlasInfo.columns     = sharedAtlas.width / textureWidth;
 
-    idleAnim = LoadAnim(MUSHROOM_IDLE, sharedAtlas, atlasInfo, offsetX, offsetY, true);
-    walkAnim = LoadAnim(MUSHROOM_WALK, sharedAtlas, atlasInfo, offsetX, offsetY, true);
-    hurtAnim = LoadAnim(MUSHROOM_HURT, sharedAtlas, atlasInfo, offsetX, offsetY, false);
-    dieAnim  = LoadAnim(MUSHROOM_DIE,  sharedAtlas, atlasInfo, offsetX, offsetY, false);
+    idleAnim = LoadAnim(MUSHROOM_IDLE, sharedAtlas, atlasInfo, true);
+    walkAnim = LoadAnim(MUSHROOM_WALK, sharedAtlas, atlasInfo, true);
+    hurtAnim = LoadAnim(MUSHROOM_HURT, sharedAtlas, atlasInfo, false);
+    dieAnim  = LoadAnim(MUSHROOM_DIE,  sharedAtlas, atlasInfo, false);
 
     // Use provided starting position
     position = startPos;
@@ -95,12 +105,15 @@ Mushroom::Mushroom(Vector2 startPos)
     speed     = 2.5;   
     speedY    = 0.0f;
     isOnGround = false;
+    hasPlatformSupport = false;
+    currentPlatformRect = {0, 0, 0, 0};
     facingRight = true;
 
     // Health initialization
     maxHealth = 50.0f;
     health = maxHealth;
     isDying = false;
+    isDeadFinal = false;
     hurtTimer = 0.0f;
 
     state = State::Idle;
@@ -145,7 +158,12 @@ void Mushroom::TakeDamage(float damageAmount)
 Rectangle Mushroom::GetRect() const
 {
     Rectangle rect = { position.x, position.y, (float)width, (float)height };
-    DrawRectangleLinesEx(rect, 2, BLUE); // Debug: Draw mushroom rectangle
+    return rect;
+}
+
+Rectangle Mushroom::GetHitbox() const
+{
+    Rectangle rect = { position.x, position.y, (float)width, (float)height };
     return rect;
 }
 
@@ -153,6 +171,7 @@ bool Mushroom::CheckPlatformCollision(const std::vector<Platform>& platforms)
 {
     Rectangle rect = GetRect();
     bool grounded = false;
+    hasPlatformSupport = false;
 
     for (const auto& platform : platforms) {
         Rectangle platformRect = platform.GetRect();
@@ -168,6 +187,8 @@ bool Mushroom::CheckPlatformCollision(const std::vector<Platform>& platforms)
                 position.y = top - height;
                 speedY = 0.0f;
                 grounded = true;
+                hasPlatformSupport = true;
+                currentPlatformRect = platformRect;
                 break;
             }
         }
@@ -176,7 +197,7 @@ bool Mushroom::CheckPlatformCollision(const std::vector<Platform>& platforms)
     return grounded;
 }
 
-void Mushroom::Update(const std::vector<Platform>& platforms, const Fighter& player)
+void Mushroom::Update(const std::vector<Platform>& platforms, const std::vector<Wall>& walls, const Fighter& player)
 {
     const float GRAVITY = 800.0f;
     float dt = GetFrameTime();
@@ -193,8 +214,8 @@ void Mushroom::Update(const std::vector<Platform>& platforms, const Fighter& pla
     if (isDying) {
         float dieAnimDuration = (float)dieAnim.rectanglesCount / (float)dieAnim.framesPerSecond;
         if (GetTime() - animationStartTime >= dieAnimDuration) {
-            //removing enemy
-            
+            // mark fully dead after death animation finishes
+            isDeadFinal = true;
         }
         return;
     }
@@ -222,14 +243,26 @@ void Mushroom::Update(const std::vector<Platform>& platforms, const Fighter& pla
     if (std::fabs(playerCenterX - myCenterX) > 4.0f) {
         // Chase only when on ground, otherwise fall
         if (isOnGround) {
-            if (playerCenterX > myCenterX) {
-                position.x += speed;
-                facingRight = true;
+            float dir = (playerCenterX > myCenterX) ? 1.0f : -1.0f;
+            float nextX = position.x + dir * speed;
+
+            if (hasPlatformSupport) {
+                float minX = currentPlatformRect.x;
+                float maxX = currentPlatformRect.x + currentPlatformRect.width - width;
+                float clampedX = clamp(nextX, minX, maxX);
+                if (std::fabs(clampedX - position.x) < 0.001f) {
+                    SetState(State::Idle);
+                } else {
+                    position.x = clampedX;
+                    facingRight = (dir > 0.0f);
+                    SetState(State::Walk);
+                }
             } else {
-                position.x -= speed;
-                facingRight = false;
+                // Fallback when no platform data is available yet
+                position.x = nextX;
+                facingRight = (dir > 0.0f);
+                SetState(State::Walk);
             }
-            SetState(State::Walk);
         } else {
             //keep motion minimal when in air
             SetState(State::Idle);
@@ -244,6 +277,13 @@ void Mushroom::Update(const std::vector<Platform>& platforms, const Fighter& pla
 
     // Platform collisions
     isOnGround = CheckPlatformCollision(platforms);
+
+    // Keep mushroom on top of its supporting platform
+    if (isOnGround && hasPlatformSupport) {
+        float minX = currentPlatformRect.x;
+        float maxX = currentPlatformRect.x + currentPlatformRect.width - width;
+        position.x = clamp(position.x, minX, maxX);
+    }
 
     // stick to bottom of screen
     int screenH = GetScreenHeight();

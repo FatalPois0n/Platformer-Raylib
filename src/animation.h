@@ -34,8 +34,6 @@ spriteAnimation LoadAnim(
     const AnimDef& def,
     Texture2D texture,
     const AtlasInfo& atlas,
-    float trimX,
-    float trimY,
     bool loop
 );
 

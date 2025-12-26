@@ -12,9 +12,10 @@ public:
     virtual ~Enemy() = default;
 
     // Pure virtual functions that all enemies must implement
-    virtual void Update(const std::vector<Platform>& platforms, const Fighter& player) = 0;
+    virtual void Update(const std::vector<Platform>& platforms, const std::vector<Wall>& walls, const Fighter& player) = 0;
     virtual void Draw() = 0;
     virtual Rectangle GetRect() const = 0;
+    virtual Rectangle GetHitbox() const = 0;
     virtual void TakeDamage(float damageAmount) = 0;
     virtual bool IsDead() const = 0;
     virtual float GetHealth() const = 0;

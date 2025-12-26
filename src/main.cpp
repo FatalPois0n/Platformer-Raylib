@@ -2,27 +2,37 @@
 #include <math.h>
 #include <vector>
 #include <string>
+#include <cctype>
 #include "fighter.hpp"
 #include "platform.hpp"
 #include "animation.h"
 #include "enemy.hpp"
 #include "mushroom.hpp"
 #include "slime.hpp"
+#include "huntress.hpp"
+#include "bringerofdeath.hpp"
 
 enum class GameState {
     Start,
     Level1,
     Level2,
+    Level3,
+    BossLevel,
     Pause,
+    GameWon,
     GameOver
 };
 
-// Forward declarations for level management functions
+// function declarations for level management
 void ClearEnemies(std::vector<Enemy*>& enemies);
 void SpawnLevel1Enemies(std::vector<Enemy*>& enemies, int screenWidth, int screenHeight);
 void SpawnLevel2Enemies(std::vector<Enemy*>& enemies, int screenWidth, int screenHeight);
+void SpawnLevel3Enemies(std::vector<Enemy*>& enemies, int screenWidth, int screenHeight);
+void SpawnBossLevelEnemies(std::vector<Enemy*>& enemies, int screenWidth, int screenHeight);
 void CreateLevel1Platforms(std::vector<Platform>& platforms, int screenWidth, int screenHeight, int groundHeight);
 void CreateLevel2Platforms(std::vector<Platform>& platforms, int screenWidth, int screenHeight, int groundHeight);
+void CreateLevel3Platforms(std::vector<Platform>& platforms, std::vector<Wall>& walls, int screenWidth, int screenHeight, int groundHeight);
+void CreateBossLevelPlatforms(std::vector<Platform>& platforms, std::vector<Wall>& walls, int screenWidth, int screenHeight, int groundHeight);
 
 
 int main() 
@@ -50,66 +60,77 @@ int main()
     Texture2D background = LoadTexture("resources/background/background_layer_1.png");
     Texture2D midground = LoadTexture("resources/background/background_layer_2.png");
     Texture2D foreground = LoadTexture("resources/background/background_layer_3.png");
-    Texture2D gameLogo = LoadTexture("resources/logo1.png");
+    Texture2D gameLogo = LoadTexture("resources/logo1a.png");
     Texture2D tileset = LoadTexture("resources/oak_woods_tileset.png");
     
     float masterVolume = 1.0f;
 
     Music menuMusic = LoadMusicStream("resources/music/Xasthur - Exit HD.mp3");
     Music level1Music = LoadMusicStream("resources/music/Fallen Down.mp3");
-    Music level2Music = LoadMusicStream("resources/music/Guy thinks I can't play Rush E and calls me a liar.mp3");
+    Music level2Music = LoadMusicStream("resources/music/Rush E.mp3");
+    Music level3Music = LoadMusicStream("resources/music/hkmori - anybody can find love (except you.).mp3");
+    Music bossLevelMusic = LoadMusicStream("resources/music/MEGALOVANIA - Toby Fox.mp3");
     Music gameOverMusic = LoadMusicStream("resources/music/SUPER MARIO - game over - sound effect.mp3");
+    Music gameWonMusic = LoadMusicStream("resources/music/Drum Roll (Ending Celebration) - Sound Effect  ProSounds.mp3");
     SetMusicVolume(menuMusic, 0.6f);
     SetMusicVolume(level1Music, 0.6f);
     SetMusicVolume(level2Music, 0.6f);
+    SetMusicVolume(level3Music, 0.6f);
+    SetMusicVolume(bossLevelMusic, 0.6f);
     SetMusicVolume(gameOverMusic, 0.6f);
+    SetMusicVolume(gameWonMusic, 0.6f);
     SetMasterVolume(masterVolume);
 
     Fighter fighter;
     
-    // Create enemies using polymorphic container
     std::vector<Enemy*> enemies;
-    
-    // Load shared mushroom texture
+
     Mushroom::LoadSharedTexture();
-    
-    // Enemies will be spawned when entering each level
 
     GameState gameState = GameState::Start;
     GameState prevState = GameState::Level1;
     float gameOverTimer = 0.0f;
     float gameOverTextY = -200.0f;
+    float gameWonTimer = 0.0f;
+    float gameWonTextY = -200.0f;
 
     bool volumeSliderActive = false;
+
+    // Cheat code: type "bigbang" to kill all enemies
+    const char* CHEAT_PHRASE = "bigbang";
+    const int CHEAT_LEN = 7;
+    int cheatProgress = 0;
 
     Color orange = { 255, 117, 0, (unsigned char)(0.67*255) };
     Color yellow = { 255, 214, 0, (unsigned char)(0.78*255) };
     Color green = { 111, 214, 0, (unsigned char)(0.78*255) };
     
-    // Define tile properties
     int tileWidth = 24;
     int tileHeight = 24;
     int tileRow = 8;
     int tileCol = 12;
+    int wallWidth = 48;
+    int wallHeight = 120;
+    int wallRow = 9;
+    int wallCol = 6;
     int groundHeight = 80;
 
-    // Create platforms
     std::vector<Platform> platforms;
-    
-    // Platforms will be created when entering each level
+    std::vector<Wall> walls;
+    std::vector<Spear> spears;
 
     // Game loop
     while(!WindowShouldClose()){
         // Input handling for state transitions
         if (gameState == GameState::Start) {
             if (IsKeyPressed(KEY_V)) {
-                gameState = GameState::Level1;
+                gameState = GameState::Level2;
                 // Initialize Level 1
                 ClearEnemies(enemies);
                 platforms.clear();
                 CreateLevel1Platforms(platforms, screenWidth, screenHeight, groundHeight);
                 SpawnLevel1Enemies(enemies, screenWidth, screenHeight);
-                fighter.Reset(); // Reset fighter state without reloading textures
+                fighter.Reset();
             }
         } 
         else if (gameState == GameState::Pause) {
@@ -121,6 +142,7 @@ int main()
                 // All enemies defeated, proceed to next level
                 gameState = GameState::Level2;
                 // Initialize Level 2
+                fighter.resetPos();
                 ClearEnemies(enemies);
                 platforms.clear();
                 CreateLevel2Platforms(platforms, screenWidth, screenHeight, groundHeight);
@@ -133,8 +155,51 @@ int main()
             }
         }
         else if (gameState == GameState::Level2) {
+            if (Enemy::allEnemiesDefeated(enemies)) {
+                // All enemies defeated, proceed to next level
+                gameState = GameState::Level3;
+                // Initialize Level 3
+                fighter.resetPos();
+                ClearEnemies(enemies);
+                platforms.clear();
+                walls.clear();
+                CreateLevel3Platforms(platforms, walls, screenWidth, screenHeight, groundHeight);
+                SpawnLevel3Enemies(enemies, screenWidth, screenHeight);
+                StopMusicStream(level2Music);
+            }
             if (IsKeyPressed(KEY_P)) {
                 prevState = GameState::Level2;
+                gameState = GameState::Pause;
+            }
+        }
+        else if (gameState == GameState::Level3) {
+            if (Enemy::allEnemiesDefeated(enemies)) {
+                // All enemies defeated, proceed to next level
+                gameState = GameState::BossLevel;
+                // Initialize Boss level
+                fighter.resetPos();
+                ClearEnemies(enemies);
+                platforms.clear();
+                walls.clear();
+                CreateBossLevelPlatforms(platforms, walls, screenWidth, screenHeight, groundHeight);
+                SpawnBossLevelEnemies(enemies, screenWidth, screenHeight);
+                StopMusicStream(level3Music);
+            }
+            if (IsKeyPressed(KEY_P)) {
+                prevState = GameState::Level3;
+                gameState = GameState::Pause;
+            }
+        }
+        else if (gameState == GameState::BossLevel) {
+            if (Enemy::allEnemiesDefeated(enemies)) {
+                // All enemies defeated, proceed to game over
+                gameState = GameState::GameWon;
+                gameWonTimer = 0.0f;
+                gameWonTextY = -200.0f;
+                StopMusicStream(bossLevelMusic);
+            }
+            if (IsKeyPressed(KEY_P)) {
+                prevState = GameState::BossLevel;
                 gameState = GameState::Pause;
             }
         }
@@ -159,7 +224,11 @@ int main()
         // Update music streams
         UpdateMusicStream(menuMusic);
         UpdateMusicStream(level1Music);
+        UpdateMusicStream(level2Music);
+        UpdateMusicStream(level3Music);
+        UpdateMusicStream(bossLevelMusic);
         UpdateMusicStream(gameOverMusic);
+        UpdateMusicStream(gameWonMusic);
 
         // Music control per game state
         if (gameState == GameState::Start) {
@@ -178,39 +247,103 @@ int main()
             if (!IsMusicStreamPlaying(level1Music)) {
                 PlayMusicStream(level1Music);
             }
-        } else if (gameState == GameState::Level2) {
+        } 
+        else if (gameState == GameState::Level2) {
             // Play level 2 music;
+            StopMusicStream(menuMusic);
+            StopMusicStream(gameOverMusic);
+            StopMusicStream(level1Music);
             ResumeMusicStream(level2Music);
             if (!IsMusicStreamPlaying(level2Music)) {
                 PlayMusicStream(level2Music);
             }
-        } else if (gameState == GameState::Pause) {
+        } 
+        else if (gameState == GameState::Level3) {
+            // Play level 3 music;
+            StopMusicStream(menuMusic);
+            StopMusicStream(level2Music);
+            StopMusicStream(level1Music);
+            ResumeMusicStream(level3Music);
+            if (!IsMusicStreamPlaying(level3Music)) {
+                PlayMusicStream(level3Music);
+            }
+        } 
+        else if (gameState == GameState::BossLevel) {
+            // Play boss level music;
+            StopMusicStream(menuMusic);
+            StopMusicStream(level2Music);
+            StopMusicStream(level1Music);
+            StopMusicStream(level3Music);
+            ResumeMusicStream(bossLevelMusic);
+            if (!IsMusicStreamPlaying(bossLevelMusic)) {
+                PlayMusicStream(bossLevelMusic);
+            }
+        }
+        else if (gameState == GameState::Pause) {
             // No music while paused
             PauseMusicStream(menuMusic);
             PauseMusicStream(level1Music);
+            PauseMusicStream(level2Music);
+            PauseMusicStream(level3Music);
+            PauseMusicStream(bossLevelMusic);
             PauseMusicStream(gameOverMusic);
         } else if (gameState == GameState::GameOver) {
             // Play game over music; stop others
             StopMusicStream(menuMusic);
             StopMusicStream(level1Music);
             StopMusicStream(level2Music);
+            StopMusicStream(level3Music);
+
             ResumeMusicStream(gameOverMusic);
             if (!IsMusicStreamPlaying(gameOverMusic)) {
                 PlayMusicStream(gameOverMusic);
             }
         }
+        else if (gameState == GameState::GameWon) {
+            // Play game won music; stop others
+            StopMusicStream(menuMusic);
+            StopMusicStream(level1Music);
+            StopMusicStream(level2Music);
+            StopMusicStream(level3Music);
+            StopMusicStream(bossLevelMusic);
+
+            ResumeMusicStream(gameWonMusic);
+            if (!IsMusicStreamPlaying(gameWonMusic)) {
+                PlayMusicStream(gameWonMusic);
+            }
+        }
 
         // Update (during gameplay and not when slider is active)
-        if ((gameState != GameState::Start && gameState != GameState::GameOver) && !volumeSliderActive) {
-            fighter.Update(platforms);
-            
+        if ((gameState != GameState::Start && gameState != GameState::GameOver && gameState != GameState::Pause) && !volumeSliderActive)
+        {
+            // Handle cheat phrase typing
+            int ch = GetCharPressed();
+            while (ch > 0) {
+                char c = (char)std::tolower(ch);
+                if (c == CHEAT_PHRASE[cheatProgress]) {
+                    cheatProgress++;
+                } else {
+                    cheatProgress = (c == CHEAT_PHRASE[0]) ? 1 : 0;
+                }
+                if (cheatProgress >= CHEAT_LEN) {
+                    // Kill all current level enemies
+                    for (auto* enemy : enemies) {
+                        if (!enemy->IsDead()) {
+                            enemy->TakeDamage(1000000.0f);
+                        }
+                    }
+                    cheatProgress = 0;
+                }
+                ch = GetCharPressed();
+            }
+
+            fighter.Update(platforms, walls);
             // Update all enemies
             for (auto* enemy : enemies) {
                 if (!enemy->IsDead()) {
-                    enemy->Update(platforms, fighter);
+                    enemy->Update(platforms, walls, fighter);
                 }
             }
-            
             // Check if fighter is attacking and deal damage to all enemies
             if (fighter.IsAttacking()) {
                 for (auto* enemy : enemies) {
@@ -223,9 +356,7 @@ int main()
                     }
                 }
             }
-            
-            fighter.characterDeath(enemies);
-            
+            fighter.characterDeath(enemies, spears);
             // Check for game over
             if (fighter.lives < 0) {
                 gameState = GameState::GameOver;
@@ -236,9 +367,8 @@ int main()
         
         // Update GameOver state
         if (gameState == GameState::GameOver) {
-            gameOverTimer += GetFrameTime();
-            
-            // Animate text falling from top to center
+            gameOverTimer += GetFrameTime();      
+            // text animation
             float targetY = (screenHeight - 120) / 2.0f;
             if (gameOverTextY < targetY) {
                 gameOverTextY += 800.0f * GetFrameTime(); // Fall speed
@@ -253,6 +383,28 @@ int main()
                 // Clean up for restart
                 ClearEnemies(enemies);
                 platforms.clear();
+            }
+        }
+        // Update GameWon state
+        if (gameState == GameState::GameWon) {
+            gameWonTimer += GetFrameTime();      
+            // text animation
+            float targetY = (screenHeight - 120) / 2.0f;
+            if (gameWonTextY < targetY) {
+                gameWonTextY += 800.0f * GetFrameTime(); // Fall speed
+                if (gameWonTextY > targetY) {
+                    gameWonTextY = targetY;
+                }
+            }
+            
+            // After 10 seconds, return to start
+            if (gameWonTimer >= 10.0f) {
+                gameState = GameState::Start;
+                // Clean up for restart
+                ClearEnemies(enemies);
+                platforms.clear();
+                gameWonTimer = 0.0f;
+                gameWonTextY = -200.0f;
             }
         }
 
@@ -274,7 +426,7 @@ int main()
             DrawTexturePro(
                 gameLogo,
                 {0, 0, (float)gameLogo.width, (float)gameLogo.height},
-                {((float)screenWidth - (float)gameLogo.width * (float)1.5) / 2, (float)screenHeight / 3 - (float)gameLogo.height * (float)1.5 / 2, gameLogo.width * (float)1.5, gameLogo.height * (float)1.5},
+                {((float)screenWidth - (float)gameLogo.width * 0.75f) / 2, ((float)screenHeight - (float)gameLogo.height* 0.75f) / 3, (float)gameLogo.width* 0.75f , (float)gameLogo.height* 0.75f },
                 {0, 0},
                 0.0f,
                 WHITE
@@ -285,6 +437,12 @@ int main()
             int promptWidth = MeasureText(prompt, promptFontSize);
             int promptX = (screenWidth - promptWidth) / 2;
             int promptY = screenHeight - 200;
+            const char* cred = "Made by Faizan Ali with <3";
+            int credFontSize = 72;
+            int credWidth = MeasureText(cred, credFontSize);
+            int credX = 200.0f;
+            int credY = screenHeight / 3;
+            Vector2 credPos = { (float)credX, (float)credY };
             
             // Flashy prompt text with alpha oscillation
             float time = GetTime();
@@ -292,6 +450,10 @@ int main()
             alpha = alpha * 0.7f + 0.3f; // Clamp between 0.3 and 1.0 for better visibility
             Color flashyYellow = { 255, 214, 0, (unsigned char)(alpha * 255) };
             DrawText(prompt, promptX, promptY, promptFontSize, flashyYellow);
+            
+            float alpha2 = (cos(time * 3.0f) + 1.0f) / 2.0f; // Oscillates between 0 and 1
+            Color flashyGreen = { 0, 255, 41, (unsigned char)(alpha2 * 255) };
+            DrawTextPro(fnt_chewy, cred,  credPos, {0,0}, -30.0f,  credFontSize, 1.0f,  flashyGreen);
             
             // Volume slider UI (bottom of screen)
             if (volumeSliderActive) {
@@ -334,6 +496,10 @@ int main()
             // Draw all platforms
             for (auto& platform : platforms) {
                 platform.Draw(tileset, tileWidth, tileHeight, tileRow, tileCol);
+            }
+            // Draw all walls
+            for (auto& wall : walls) {
+                wall.Draw(tileset, wallWidth, wallHeight, wallRow, wallCol);
             }
 
             // HUD texts (only shown during gameplay & pause)
@@ -386,6 +552,17 @@ int main()
                 int gameOverX = (screenWidth - gameOverWidth) / 2;
                 DrawText(gameOverText, gameOverX, (int)gameOverTextY, gameOverFontSize, RED);
             }
+            if (gameState == GameState::GameWon) {
+                // Apply golden overlay
+                Color goldOverlay = {255, 215, 0, 100};
+                DrawRectangle(0, 0, screenWidth, screenHeight, goldOverlay);
+                // Draw falling "GAME WON" text in gold
+                const char* gameWonText = "GAME WON";
+                int gameWonFontSize = 120;
+                int gameWonWidth = MeasureText(gameWonText, gameWonFontSize);
+                int gameWonX = (screenWidth - gameWonWidth) / 2;
+                DrawText(gameWonText, gameWonX, (int)gameWonTextY, gameWonFontSize, GOLD);
+            }
 
             // Volume slider UI (bottom of screen)
             if (volumeSliderActive) {
@@ -417,7 +594,10 @@ int main()
     UnloadMusicStream(menuMusic);
     UnloadMusicStream(level1Music);
     UnloadMusicStream(level2Music);
+    UnloadMusicStream(level3Music);
+    UnloadMusicStream(bossLevelMusic);
     UnloadMusicStream(gameOverMusic);
+    UnloadMusicStream(gameWonMusic);
     CloseAudioDevice();
     CloseWindow();
     return 0;
@@ -433,18 +613,27 @@ void ClearEnemies(std::vector<Enemy*>& enemies) {
 
 void SpawnLevel1Enemies(std::vector<Enemy*>& enemies, int screenWidth, int screenHeight) {
     // Level 1: 2 mushrooms and 1 slime
-    enemies.push_back(new Mushroom({300.0f, (float)screenHeight - 300.0f}));
+    enemies.push_back(new Mushroom({400.0f, (float)screenHeight - (160*6)}));
     enemies.push_back(new Mushroom({1600.0f, (float)screenHeight - 300.0f}));
     enemies.push_back(new Slime({960.0f, (float)screenHeight - 400.0f}));
 }
 
 void SpawnLevel2Enemies(std::vector<Enemy*>& enemies, int screenWidth, int screenHeight) {
     // Level 2: 3 mushrooms and 2 slimes
-    enemies.push_back(new Mushroom({400.0f, (float)screenHeight - 500.0f}));
+    enemies.push_back(new Mushroom({1500.0f, (float)screenHeight - 100.0f}));
     enemies.push_back(new Mushroom({960.0f, (float)screenHeight - 350.0f}));
     enemies.push_back(new Mushroom({1500.0f, (float)screenHeight - 650.0f}));
     enemies.push_back(new Slime({700.0f, (float)screenHeight - 300.0f}));
     enemies.push_back(new Slime({1300.0f, (float)screenHeight - 450.0f}));
+}
+void SpawnLevel3Enemies(std::vector<Enemy*>& enemies, int screenWidth, int screenHeight) {
+    // Level 3: 2 huntresses
+    enemies.push_back(new Huntress({250.0f, (float)screenHeight - 825.0f}));
+    enemies.push_back(new Huntress({screenWidth - 250.0f, (float)screenHeight - 825.0f}));
+    
+}
+void SpawnBossLevelEnemies(std::vector<Enemy*>& enemies, int screenWidth, int screenHeight) {
+    enemies.push_back(new Boss({1500.0f, (float)screenHeight - 200.0f}));
 }
 
 void CreateLevel1Platforms(std::vector<Platform>& platforms, int screenWidth, int screenHeight, int groundHeight) {
@@ -490,4 +679,39 @@ void CreateLevel2Platforms(std::vector<Platform>& platforms, int screenWidth, in
     // Additional scattered platforms
     platforms.push_back(Platform(600, screenHeight - 800, 200, 40, false));
     platforms.push_back(Platform(1200, screenHeight - 800, 200, 40, false));
+}
+void CreateLevel3Platforms(std::vector<Platform>& platforms, std::vector<Wall>& walls, int screenWidth, int screenHeight, int groundHeight) {
+    // Ground platform (same for all levels)
+    platforms.push_back(Platform(0, screenHeight - groundHeight, screenWidth, groundHeight, true));
+    
+    // Level 3 specific platforms - wall in middle and climbing sections on either side of screen
+
+    //centre wall
+    walls.push_back(Wall(screenWidth/2 - 50, screenHeight - groundHeight - 600, 100, 600, true));
+
+    // Left side platforms
+    platforms.push_back(Platform(screenWidth/2 - 50 - 350, screenHeight - 200, 350, 40, false));
+    platforms.push_back(Platform(0, screenHeight - 350, 350, 40, false));
+    platforms.push_back(Platform(screenWidth/2 - 50 - 350, screenHeight - 500, 350, 40, false));
+    platforms.push_back(Platform(0, screenHeight - 650, 350, 40, false));
+    
+    // Center platform
+    platforms.push_back(Platform(200, screenHeight - 825, screenWidth - 400, 40, false));
+    
+    // // Right side platforms
+    platforms.push_back(Platform(screenWidth/2 + 48, screenHeight - 200, 350, 40, false));
+    platforms.push_back(Platform(screenWidth - 350, screenHeight - 350, 350, 40, false));
+    platforms.push_back(Platform(screenWidth/2 + 48, screenHeight - 500, 350, 40, false));
+    platforms.push_back(Platform(screenWidth - 350, screenHeight - 650, 350, 40, false));
+    
+    // // Additional scattered platforms
+    // platforms.push_back(Platform(600, screenHeight - 800, 200, 40, false));
+    // platforms.push_back(Platform(1200, screenHeight - 800, 200, 40, false));
+}
+void CreateBossLevelPlatforms(std::vector<Platform>& platforms, std::vector<Wall>& walls, int screenWidth, int screenHeight, int groundHeight) {
+    // Ground platform (same for all levels)
+    platforms.push_back(Platform(0, screenHeight - groundHeight, screenWidth, groundHeight, true));
+    
+    // Level 3 specific platforms - wall in middle and climbing sections on either side of screen
+
 }

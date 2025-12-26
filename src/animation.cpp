@@ -74,7 +74,7 @@ std::vector<Rectangle> BuildFrames(int startRow,int startCol,int frameCount,int 
             (float)col * frameW + trimX,
             (float)row * frameH + trimY,
             (float)frameW - 2 * trimX,
-            (float)frameH - trimY
+            (float)frameH - 2* trimY
         });
     }
     return frames;
@@ -84,8 +84,6 @@ spriteAnimation LoadAnim(
     const AnimDef& def,
     Texture2D texture,
     const AtlasInfo& atlas,
-    float trimX,
-    float trimY,
     bool loop
 ) {
     std::vector<Rectangle> frames;
@@ -97,10 +95,10 @@ spriteAnimation LoadAnim(
         int row = def.row + index / atlas.columns;
 
         frames.push_back(Rectangle{
-            col * atlas.frameWidth  + trimX,
-            row * atlas.frameHeight + trimY,
-            atlas.frameWidth  - 2 * trimX,
-            atlas.frameHeight - trimY
+            (float)col * atlas.frameWidth,
+            (float)row * atlas.frameHeight ,
+            (float)atlas.frameWidth,
+            (float)atlas.frameHeight
         });
     }
 
