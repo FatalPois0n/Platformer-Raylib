@@ -1,6 +1,18 @@
 Graphics
+
 Areeba Ghafoor
-Brullov Art (bg and platforms assets)
+Brullov Art (bg , platforms and fighter character assets)
 BDragon1727 (bullet assets)
+--------------------
 Developer
+
 Faizan Ali
+-----------------
+Music
+
+Toby fox
+Rush E by Fanchen
+NaughtZero Music
+C418
+Xasthur
+hkmori
