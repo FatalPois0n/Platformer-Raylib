@@ -17,7 +17,7 @@ class Fighter {
     Rectangle GetRect() const;
     Rectangle GetHitbox() const;
     Rectangle GetAttackHitbox() const;
-    void characterDeath(const std::vector<Enemy*>& enemies, const std::vector<Spear>& spears);
+    void characterDeath(const std::vector<Enemy*>& enemies);
     void PerformSlash(Enemy& enemy);
     void PerformComboSlash(Enemy& enemy);
     bool IsAttacking() const { return isAttacking || comboAttack; }

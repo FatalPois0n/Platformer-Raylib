@@ -5,7 +5,7 @@
 #include "animation.h"
 #include "enemy.hpp"
 
-class Fighter; // forward declaration
+// class Fighter; // forward declaration
 
 // Spear projectile struct
 struct Spear {
@@ -36,13 +36,13 @@ public:
     float GetHealth() const override { return health; }
     void LoadSharedTexture();
     void UnloadSharedTexture();
-
-    // Optionally resolve projectile hits on player (reduces lives and sets invincibility)
-    void ResolveHitsOnPlayer(Fighter& player);
+    const std::vector<Spear>& GetSpears() const { return spears; }
 
 private:
     static Texture2D sharedAtlas;
     static Texture2D spearAtlas;
+    static constexpr float HITBOX_OFFSET_X = 135.0f;
+    static constexpr float HITBOX_OFFSET_Y = 133.0f;
     AtlasInfo atlasInfo;
     // spriteAnimation attack1Anim;
     // spriteAnimation attack2Anim;
@@ -77,6 +77,16 @@ private:
     bool isDying;
     bool isDeadFinal;
 
+    int moveDir;
+    float walkingTimer;
+    float idleTimer;
+    Rectangle standingPlatformRect;
+    bool hasStandingPlatform;
+    float jumpCooldown;
+    float edgeCooldown;
+    float directionChangeCooldown;
+    int directionChanges;
+
     enum class State { Idle, Walk, Hurt, Die, Jump, Fall, Attack1, Attack2, Attack3};
     State state;
     State lastState;
@@ -88,7 +98,8 @@ private:
     std::vector<Spear> spears;   // Active spears in flight
 
     void SetState(State newState);
-    bool CheckPlatformCollision(const std::vector<Platform>& platforms);
+    bool CheckPlatformCollision(const std::vector<Platform>& platforms, Rectangle* platformHit);
+    float GetFeetY() const;
     void SpawnSpear();
-    void UpdateSpear(const std::vector<Platform>& platforms, const std::vector<Wall>& walls);
+    void UpdateSpear(const std::vector<Platform>& platforms, const std::vector<Wall>& walls, const Fighter& player);
 };

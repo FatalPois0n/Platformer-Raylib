@@ -66,10 +66,19 @@ Huntress::Huntress()
     scale = 2.5f;
     width = (int)(textureWidth * scale);
     height = (int)(textureHeight * scale);
-    speed = 2;
+    speed = 3;
     speedY = 0.0f;
     isOnGround = false;
     facingRight = true;
+    moveDir = -1;
+    walkingTimer = 8.0f;
+    idleTimer = 0.0f;
+    standingPlatformRect = {0.0f, 0.0f, 0.0f, 0.0f};
+    hasStandingPlatform = false;
+    jumpCooldown = 0.0f;
+    edgeCooldown = 0.0f;
+    directionChangeCooldown = 0.0f;
+    directionChanges = 0;
 
     maxHealth = 80.0f;
     health = maxHealth;
@@ -113,31 +122,39 @@ Rectangle Huntress::GetRect() const
 
 Rectangle Huntress::GetHitbox() const
 {
-    // Use full standing height for collision to avoid flicker/jitter when crouching
-    float offsetX = 135.0f;
-    float offsetY = 133.0f;
-    float x = position.x + offsetX;
-    float y = position.y + offsetY;
-    float w = (float)width - offsetX*2;
-    float h = (float)height - offsetY*2;
-   
+    float x = position.x + HITBOX_OFFSET_X;
+    float y = position.y + HITBOX_OFFSET_Y;
+    float w = (float)width - HITBOX_OFFSET_X * 2.0f;
+    float h = (float)height - HITBOX_OFFSET_Y * 2.0f;
     return Rectangle{x, y, w, h};
 }
 
-bool Huntress::CheckPlatformCollision(const std::vector<Platform>& platforms)
+float Huntress::GetFeetY() const
+{
+    Rectangle hit = GetHitbox();
+    return hit.y + hit.height;
+}
+
+bool Huntress::CheckPlatformCollision(const std::vector<Platform>& platforms, Rectangle* platformHit)
 {
     Rectangle rect = GetHitbox();
     bool grounded = false;
+    if (platformHit) {
+        *platformHit = {0.0f, 0.0f, 0.0f, 0.0f};
+    }
 
     for (const auto& platform : platforms) {
         Rectangle pr = platform.GetRect();
         if (speedY >= 0 && rect.x + rect.width > pr.x && rect.x < pr.x + pr.width) {
-            float bottom = rect.y + rect.height;
-            float top = pr.y;
-            if (bottom >= top && bottom <= top + pr.height) {
-                position.y = top - rect.height;
+            float feetY = rect.y + rect.height;
+            float platformTop = pr.y;
+            if (feetY >= platformTop && feetY <= platformTop + pr.height) {
+                position.y = platformTop - (HITBOX_OFFSET_Y + rect.height);
                 speedY = 0.0f;
                 grounded = true;
+                if (platformHit) {
+                    *platformHit = pr;
+                }
                 break;
             }
         }
@@ -160,8 +177,9 @@ void Huntress::TakeDamage(float damageAmount)
 void Huntress::Update(const std::vector<Platform>& platforms, const std::vector<Wall>& walls, const Fighter& player)
 {
     const float GRAVITY = 800.0f;
+    const float JUMP_VELOCITY = -700.0f;
     float dt = GetFrameTime();
-    Rectangle hitbox = GetHitbox();
+    double now = GetTime();
 
     if (isDeadFinal) return;
 
@@ -171,28 +189,48 @@ void Huntress::Update(const std::vector<Platform>& platforms, const std::vector<
         return;
     }
 
-    // Face player
-    float playerCenterX = player.GetHitbox().x + player.GetHitbox().width * 0.5f;
-    float myCenterX = position.x + hitbox.width * 0.5f;
-    facingRight = (playerCenterX >= myCenterX);
-
-    // Hover on platform without walking (huntress stays put)
+    // Vertical movement and ground snap
     speedY += GRAVITY * dt;
     position.y += speedY * dt;
-    isOnGround = CheckPlatformCollision(platforms);
-    if (position.y + hitbox.height >= GetScreenHeight()) {
-        position.y = (float)GetScreenHeight() - hitbox.height;
+
+    Rectangle groundRect{};
+    isOnGround = CheckPlatformCollision(platforms, &groundRect);
+    if (isOnGround) {
+        standingPlatformRect = groundRect;
+        hasStandingPlatform = true;
         speedY = 0.0f;
-        isOnGround = true;
+    } else {
+        hasStandingPlatform = false;
     }
 
+    if (isOnGround && (state == State::Jump || state == State::Fall)) {
+        SetState(State::Idle);
+    }
+
+    Rectangle hitbox = GetHitbox();
+    float feetHeight = HITBOX_OFFSET_Y + hitbox.height;
+    float feetY = GetFeetY();
+    int screenH = GetScreenHeight();
+    int screenW = GetScreenWidth();
+    if (feetY >= (float)screenH) {
+        position.y = (float)screenH - feetHeight;
+        speedY = 0.0f;
+        isOnGround = true;
+        hasStandingPlatform = true;
+        standingPlatformRect = {0.0f, (float)screenH - 2.0f, (float)screenW, 4.0f};
+        hitbox = GetHitbox();
+    }
+
+    float playerCenterX = player.GetHitbox().x + player.GetHitbox().width * 0.5f;
+    float myCenterX = hitbox.x + hitbox.width * 0.5f;
+
     // Attack3 timing and state machine
-    double now = GetTime();
     if (state == State::Attack3) {
         float attack3Elapsed = (float)(now - attack3StartTime);
         
         // Spawn spear 1 second after attack3 starts
         if (attack3Elapsed >= 1.0f && !attack3ProjectileFired) {
+            facingRight = (playerCenterX >= myCenterX);
             SpawnSpear();
             attack3ProjectileFired = true;
         }
@@ -200,7 +238,7 @@ void Huntress::Update(const std::vector<Platform>& platforms, const std::vector<
         // End attack3 after 1 second, return to idle
         if (attack3Elapsed >= 1.0f) {
             state = State::Idle;
-            attack3Cooldown = 2.0f; // 2 second cooldown before next attack3
+            attack3Cooldown = 5.0f; // 5 second cooldown before next attack3
         }
     }
     
@@ -208,16 +246,122 @@ void Huntress::Update(const std::vector<Platform>& platforms, const std::vector<
     if (attack3Cooldown > 0.0f) {
         attack3Cooldown -= dt;
     }
-    
-    // Initiate new attack3 when on ground and cooldown expired
-    if (isOnGround && state == State::Idle && attack3Cooldown <= 0.0f) {
-        state = State::Attack3;
-        attack3StartTime = now;
-        attack3ProjectileFired = false;
+
+    // Movement and patrol AI (skip while attacking or hurt)
+    if (state != State::Attack3 && state != State::Hurt) {
+        if (jumpCooldown > 0.0f) {
+            jumpCooldown -= dt;
+        }
+        if (edgeCooldown > 0.0f) {
+            edgeCooldown -= dt;
+        }
+        if (directionChangeCooldown > 0.0f) {
+            directionChangeCooldown -= dt;
+        }
+        if (walkingTimer > 0.0f) {
+            walkingTimer -= dt;
+        }
+        if (idleTimer > 0.0f) {
+            idleTimer -= dt;
+        }
+
+        hitbox = GetHitbox();
+
+        if (isOnGround) {
+            bool jumped = false;
+            if (jumpCooldown <= 0.0f) {
+                float centerX = hitbox.x + hitbox.width * 0.5f;
+                for (const auto& pf : platforms) {
+                    Rectangle pfRect = pf.GetRect();
+                    bool above = pfRect.y + pfRect.height < hitbox.y;
+                    bool alignedX = centerX >= pfRect.x && centerX <= pfRect.x + pfRect.width;
+                    float verticalGap = hitbox.y - (pfRect.y + pfRect.height);
+                    if (above && alignedX && verticalGap < 320.0f) {
+                        if (GetRandomValue(0, 0.5*60*100) < 25) { // 25% chance to jump per 0.5 second
+                            speedY = JUMP_VELOCITY;
+                            isOnGround = false;
+                            hasStandingPlatform = false;
+                            SetState(State::Jump);
+                            jumpCooldown = 1.2f;
+                            jumped = true;
+                        }
+                        break;
+                    }
+                }
+                if (!jumped && jumpCooldown <= 0.0f) {
+                    jumpCooldown = 0.3f;
+                }
+            }
+
+            if (!jumped) {
+                float step = moveDir * (float)speed;
+                Rectangle nextHitbox = hitbox;
+                nextHitbox.x += step;
+
+                // Check screen edges
+                int screenW = GetScreenWidth();
+                bool atScreenEdge = (nextHitbox.x <= 0.0f) || (nextHitbox.x + nextHitbox.width >= (float)screenW);
+                
+                if (atScreenEdge) {
+                    // Flip direction at screen edge
+                    moveDir *= -1;
+                    directionChangeCooldown = 5.0f;
+                    directionChanges++;
+                    step = moveDir * (float)speed;
+                    position.x += step * 2.0f; // Move further away from edge
+                    SetState(State::Walk);
+                } else {
+                    // Determine current state and action
+                    if (idleTimer > 0.0f) {
+                        // Currently idling - don't move
+                        SetState(State::Idle);
+                    } else if (walkingTimer > 0.0f) {
+                        // Walking - move forward
+                        position.x += step;
+                        SetState(State::Walk);
+                    } else if (walkingTimer <= 0.0f && idleTimer <= 0.0f && state == State::Walk) {
+                        // Just transitioned from walking to idle
+                        idleTimer = 3.0f;
+                        SetState(State::Idle);
+                    } else if (walkingTimer <= 0.0f && idleTimer <= 0.0f && state == State::Idle) {
+                        // Just finished idling - resume walking
+                        walkingTimer = 5.0f;
+                        if (GetRandomValue(0, 1) == 0) { // 50% chance to change direction
+                            moveDir *= -1;
+                            directionChangeCooldown = 5.0f;
+                            directionChanges++;
+                        }
+                        position.x += step;
+                        SetState(State::Walk);
+                    }
+                }
+            }
+            
+            facingRight = moveDir > 0;
+        } else {
+            if (speedY > 0.0f) {
+                SetState(State::Fall);
+            }
+        }
+
+        hitbox = GetHitbox();
+        myCenterX = hitbox.x + hitbox.width * 0.5f;
+
+        if (isOnGround && attack3Cooldown <= 0.0f) {
+            facingRight = (playerCenterX >= myCenterX);
+            SetState(State::Attack3);
+            attack3StartTime = now;
+            attack3ProjectileFired = false;
+            if (directionChangeCooldown < 1.5f) {
+                directionChangeCooldown = 1.5f; // lock direction changes for 1s after attack start
+            }
+        }
+
+
     }
 
     // Update spear (platform collisions, lifetime)
-    UpdateSpear(platforms, walls);
+    UpdateSpear(platforms, walls, player);
 }
 
 void Huntress::Draw()
@@ -227,7 +371,7 @@ void Huntress::Draw()
     Vector2 origin{0,0};
     Rectangle dest = GetRect();
     Rectangle spearDest = GetRect();
-    spearDest.x += facingRight ? dest.width : -20.0f;
+    spearDest.x += facingRight ? GetHitbox().width : -20.0f;
     spearDest.y += dest.height * 0.4f;
 
     DrawRectangleLinesEx(GetHitbox(), 1.0f, RED); // Debug: draw hitbox
@@ -282,28 +426,16 @@ void Huntress::SetState(State newState)
     }
 }
 
-void Huntress::ResolveHitsOnPlayer(Fighter& player)
-{
-    if (isDeadFinal) return;
-    Rectangle prPlayer = player.GetHitbox();
-    for (auto& p : spears) {
-        if (!p.alive) continue;
-        if (CheckCollisionRecs(p.GetRect(), prPlayer)) {
-            // Basic damage: reduce a life and give brief invincibility
-            if (player.invincibilityTimer <= 0.0f) {
-                player.lives -= 1;
-                player.invincibilityTimer = 2.0f;
-            }
-            p.alive = false;
-        }
-    }
-}
 void Huntress::SpawnSpear()
 {
-    // Spawn spear 20 pixels away from huntress in the facing direction
-    Vector2 spearPos = position;
-    spearPos.x += facingRight ? width + 20.0f : -20.0f;
-    spearPos.y += height * 0.4f; // Vertical center-ish
+    // Spawn spear from huntress center
+    Rectangle spriteRect = GetRect();
+    float centerX = spriteRect.x + spriteRect.width * 0.5f;
+    float centerY = spriteRect.y + spriteRect.height * 0.40f; // Upper-mid body
+    
+    Vector2 spearPos;
+    spearPos.x = facingRight ? centerX + 40.0f : centerX - 40.0f;
+    spearPos.y = centerY;
     
     float spearSpeed = 300.0f; // pixels per second
     float speedX = facingRight ? spearSpeed : -spearSpeed;
@@ -318,7 +450,7 @@ void Huntress::SpawnSpear()
     spears.push_back(newSpear);
 }
 
-void Huntress::UpdateSpear(const std::vector<Platform>& platforms, const std::vector<Wall>& walls)
+void Huntress::UpdateSpear(const std::vector<Platform>& platforms, const std::vector<Wall>& walls, const Fighter& player)
 {
     float dt = GetFrameTime();
     
@@ -346,6 +478,11 @@ void Huntress::UpdateSpear(const std::vector<Platform>& platforms, const std::ve
         
         // Check collision with walls
         if (!collided) {
+            Rectangle playerRect = player.GetRect();
+            if (CheckCollisionRecs(spearRect, playerRect)) {
+                collided = true;
+                break;
+            }
             for (const auto& wall : walls) {
                 Rectangle wallRect = wall.GetRect();
                 if (CheckCollisionRecs(spearRect, wallRect)) {

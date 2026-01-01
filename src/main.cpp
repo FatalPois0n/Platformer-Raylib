@@ -124,7 +124,7 @@ int main()
         // Input handling for state transitions
         if (gameState == GameState::Start) {
             if (IsKeyPressed(KEY_V)) {
-                gameState = GameState::Level2;
+                gameState = GameState::Level1;
                 // Initialize Level 1
                 ClearEnemies(enemies);
                 platforms.clear();
@@ -356,7 +356,7 @@ int main()
                     }
                 }
             }
-            fighter.characterDeath(enemies, spears);
+            fighter.characterDeath(enemies);
             // Check for game over
             if (fighter.lives < 0) {
                 gameState = GameState::GameOver;
@@ -403,6 +403,7 @@ int main()
                 // Clean up for restart
                 ClearEnemies(enemies);
                 platforms.clear();
+                StopMusicStream(gameWonMusic);
                 gameWonTimer = 0.0f;
                 gameWonTextY = -200.0f;
             }
@@ -432,7 +433,7 @@ int main()
                 WHITE
             );
 
-            const char* prompt = "Press start button";
+            const char* prompt = "Press v to start";
             int promptFontSize = 96;
             int promptWidth = MeasureText(prompt, promptFontSize);
             int promptX = (screenWidth - promptWidth) / 2;
@@ -684,25 +685,23 @@ void CreateLevel3Platforms(std::vector<Platform>& platforms, std::vector<Wall>& 
     // Ground platform (same for all levels)
     platforms.push_back(Platform(0, screenHeight - groundHeight, screenWidth, groundHeight, true));
     
-    // Level 3 specific platforms - wall in middle and climbing sections on either side of screen
+    // Level 3 specific platforms - Climbing sections on either side of screen
 
-    //centre wall
-    walls.push_back(Wall(screenWidth/2 - 50, screenHeight - groundHeight - 600, 100, 600, true));
 
     // Left side platforms
-    platforms.push_back(Platform(screenWidth/2 - 50 - 350, screenHeight - 200, 350, 40, false));
-    platforms.push_back(Platform(0, screenHeight - 350, 350, 40, false));
-    platforms.push_back(Platform(screenWidth/2 - 50 - 350, screenHeight - 500, 350, 40, false));
-    platforms.push_back(Platform(0, screenHeight - 650, 350, 40, false));
+    platforms.push_back(Platform(screenWidth/2 - 50 - 375, screenHeight - 250, 325, 40, false));
+    platforms.push_back(Platform(0, screenHeight - 400, 350, 40, false));
+    platforms.push_back(Platform(screenWidth/2 - 50 - 375, screenHeight - 550, 325, 40, false));
+    platforms.push_back(Platform(0, screenHeight - 700, 350, 40, false));
     
     // Center platform
-    platforms.push_back(Platform(200, screenHeight - 825, screenWidth - 400, 40, false));
+    platforms.push_back(Platform(200, screenHeight - 850, screenWidth - 400, 40, false));
     
     // // Right side platforms
-    platforms.push_back(Platform(screenWidth/2 + 48, screenHeight - 200, 350, 40, false));
-    platforms.push_back(Platform(screenWidth - 350, screenHeight - 350, 350, 40, false));
-    platforms.push_back(Platform(screenWidth/2 + 48, screenHeight - 500, 350, 40, false));
-    platforms.push_back(Platform(screenWidth - 350, screenHeight - 650, 350, 40, false));
+    platforms.push_back(Platform(screenWidth/2 + 75, screenHeight - 250, 325, 40, false));
+    platforms.push_back(Platform(screenWidth - 350, screenHeight - 400, 350, 40, false));
+    platforms.push_back(Platform(screenWidth/2 + 75, screenHeight - 550, 325, 40, false));
+    platforms.push_back(Platform(screenWidth - 350, screenHeight - 700, 350, 40, false));
     
     // // Additional scattered platforms
     // platforms.push_back(Platform(600, screenHeight - 800, 200, 40, false));
@@ -712,6 +711,6 @@ void CreateBossLevelPlatforms(std::vector<Platform>& platforms, std::vector<Wall
     // Ground platform (same for all levels)
     platforms.push_back(Platform(0, screenHeight - groundHeight, screenWidth, groundHeight, true));
     
-    // Level 3 specific platforms - wall in middle and climbing sections on either side of screen
+    // Boss level specific platforms - tall walls on sides and central elevated platform
 
 }

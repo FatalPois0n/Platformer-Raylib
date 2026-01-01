@@ -28,7 +28,7 @@ Fighter::Fighter()
     attackCooldown = 0.40f;
     nextAttackReadyTime = 0.0f;
 
-    startingPosition = {50.0f, 1080.0f - 80 - 200.0f}; // Start on ground
+    startingPosition = {50.0f, 1080.0f - 80 - 250.0f}; // Start on ground
     position = startingPosition;                       // manipulatable position vector
     scale = 3.5;
     width = (textureWidth * scale);
@@ -111,7 +111,7 @@ Rectangle Fighter::GetAttackHitbox() const
     float hitboxHeight = height * 0.8f; // Most of player height
     float hitboxX = facingRight ? position.x + width * 0.5f : position.x - hitboxWidth + width * 0.5f;
     float hitboxY = position.y + height * 0.1f;
-
+    
     return Rectangle{hitboxX, hitboxY, hitboxWidth, hitboxHeight};
 }
 
@@ -125,6 +125,8 @@ void Fighter::PerformSlash(Enemy& enemy)
     
     Rectangle attackBox = GetAttackHitbox();
     Rectangle enemyBox = enemy.GetHitbox();
+
+    DrawRectangleLinesEx(attackBox, 1.0f, BLUE); // Debug: draw attack hitbox
     
     if (CheckCollisionRecs(attackBox, enemyBox) && !enemy.IsDead()) {
         enemy.TakeDamage(baseDamage);
@@ -206,6 +208,7 @@ Rectangle Fighter::GetRect() const
         float crouchOffsetY = height - crouchHeight; // keep feet planted
         return Rectangle{position.x, position.y + crouchOffsetY, (float)width, crouchHeight};
     }
+    // DrawRectangleLinesEx(Rectangle{position.x, position.y, (float)width, (float)height}, 1.0f, RED); // Debug: draw texture box
     return Rectangle{position.x, position.y, (float)width, (float)height};
 }
 
@@ -338,7 +341,7 @@ bool Fighter::CheckWallCollision(const std::vector<Wall> &walls)
     return standingOnWallTop;
 }
 
-void Fighter::characterDeath(const std::vector<Enemy*>& enemies, const std::vector<Spear>& spears)
+void Fighter::characterDeath(const std::vector<Enemy*>& enemies)
 {
     float deltaTime = GetFrameTime();
     
@@ -384,23 +387,36 @@ void Fighter::characterDeath(const std::vector<Enemy*>& enemies, const std::vect
                 break; // Only take damage once per frame
             }
         }
-        for (const auto& spear : spears) {
-            if (spear.alive == false) {
+        
+        // Check collision with spears from Huntress enemies
+        for (const auto* enemy : enemies) {
+            if (enemy->IsDead()) {
                 continue;
             }
-
-            Rectangle a = GetHitbox();
-            Rectangle b = spear.GetRect();
             
-            if (CheckCollisionRecs(a, b)) {
-                // Collision detected - trigger death
-                isDying = true;
-                width = textureWidth * scale;
-                height = textureHeight * scale;
-                deathTimer = 0.0f;
-                animationStartTime = GetTime(); // start death animation from frame 0
-                lives -= 1;
-                break; // Only take damage once per frame
+            // Try to cast to Huntress to get spears
+            const Huntress* huntress = dynamic_cast<const Huntress*>(enemy);
+            if (huntress) {
+                const auto& spears = huntress->GetSpears();
+                for (const auto& spear : spears) {
+                    if (!spear.alive) {
+                        continue;
+                    }
+
+                    Rectangle a = GetHitbox();
+                    Rectangle b = spear.GetRect();
+                    
+                    if (CheckCollisionRecs(a, b)) {
+                        // Collision detected - trigger death
+                        isDying = true;
+                        width = textureWidth * scale;
+                        height = textureHeight * scale;
+                        deathTimer = 0.0f;
+                        animationStartTime = GetTime(); // start death animation from frame 0
+                        lives -= 1;
+                        return; // Exit immediately after taking damage
+                    }
+                }
             }
         }
     }
@@ -440,7 +456,7 @@ void Fighter::Update(const std::vector<Platform> &platforms, const std::vector<W
     // Horizontal movement (can't run while crouching or mid-attack)
     if (!isCrouching && !isAttacking && !comboAttack)
     {
-        if (IsKeyDown(KEY_RIGHT) && position.x + width < screenWidth)
+        if (IsKeyDown(KEY_RIGHT) && GetHitbox().x + GetHitbox().width < screenWidth)
         {
             Vector2 oldPos = position;
             position.x += speed;
@@ -451,7 +467,7 @@ void Fighter::Update(const std::vector<Platform> &platforms, const std::vector<W
             facingRight = true;
             isRunning = true;
         }
-        else if (IsKeyDown(KEY_LEFT) && position.x > 0)
+        else if (IsKeyDown(KEY_LEFT) && GetHitbox().x > 0)
         {
             Vector2 oldPos = position;
             position.x -= speed;
