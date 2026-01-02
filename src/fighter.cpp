@@ -1,6 +1,8 @@
 #include "fighter.hpp"
 #include "animation.h"
 #include "enemy.hpp"
+#include "huntress.hpp"
+#include "bringerofdeath.hpp"
 #include <raylib.h>
 
 Fighter::Fighter()
@@ -126,7 +128,7 @@ void Fighter::PerformSlash(Enemy& enemy)
     Rectangle attackBox = GetAttackHitbox();
     Rectangle enemyBox = enemy.GetHitbox();
 
-    DrawRectangleLinesEx(attackBox, 1.0f, BLUE); // Debug: draw attack hitbox
+    // DrawRectangleLinesEx(attackBox, 1.0f, BLUE); // Debug: draw attack hitbox
     
     if (CheckCollisionRecs(attackBox, enemyBox) && !enemy.IsDead()) {
         enemy.TakeDamage(baseDamage);
@@ -154,7 +156,7 @@ void Fighter::PerformComboSlash(Enemy& enemy)
 
 void Fighter::Draw()
 {
-    DrawRectangleLinesEx(GetHitbox(), 1.0f, RED); // Debug: draw hitbox
+    // DrawRectangleLinesEx(GetHitbox(), 1.0f, RED); // Debug: draw hitbox
     float elapsedTime = GetTime() - animationStartTime;
 
     if (isDying)
@@ -416,6 +418,43 @@ void Fighter::characterDeath(const std::vector<Enemy*>& enemies)
                         lives -= 1;
                         return; // Exit immediately after taking damage
                     }
+                }
+            }
+        }
+        
+        // Check collision with Boss attack hitboxes
+        for (const auto* enemy : enemies) {
+            if (enemy->IsDead()) {
+                continue;
+            }
+            
+            // Try to cast to Boss to get attack hitboxes
+            const Boss* boss = dynamic_cast<const Boss*>(enemy);
+            if (boss) {
+                Rectangle a = GetHitbox();
+                
+                // Check Attack1 hitbox
+                Rectangle attack1Box = boss->GetAttack1Hitbox();
+                if (CheckCollisionRecs(a, attack1Box)) {
+                    isDying = true;
+                    width = textureWidth * scale;
+                    height = textureHeight * scale;
+                    deathTimer = 0.0f;
+                    animationStartTime = GetTime();
+                    lives -= 1;
+                    return;
+                }
+                
+                // Check Cast (spell) hitbox
+                Rectangle castBox = boss->GetCastHitbox();
+                if (CheckCollisionRecs(a, castBox)) {
+                    isDying = true;
+                    width = textureWidth * scale;
+                    height = textureHeight * scale;
+                    deathTimer = 0.0f;
+                    animationStartTime = GetTime();
+                    lives -= 1;
+                    return;
                 }
             }
         }

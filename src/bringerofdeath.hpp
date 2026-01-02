@@ -22,6 +22,8 @@ public:
     float GetHealth() const override { return health; }
     void LoadSharedTexture();
     void UnloadSharedTexture();
+    Rectangle GetAttack1Hitbox() const;
+    Rectangle GetCastHitbox() const;
 
 private:
     static Texture2D sharedAtlas;
@@ -48,6 +50,8 @@ private:
     bool isOnGround;
     bool facingRight;
     Rectangle playerRectCache;
+    Vector2 spellStartPos;
+    bool spellStarted;
 
 
     float maxHealth;
@@ -58,8 +62,10 @@ private:
     bool isLanding;
     bool isDying;
     bool isDeadFinal;
+    float castCooldown;
+    float castTimer;
 
-    enum class State { Idle, Walk, Hurt, Die, Attack1, Cast, Spell};
+    enum class State { Idle, Walk, Hurt, Die, Attack1, Cast};
     State state;
     State lastState;
     float animationStartTime;

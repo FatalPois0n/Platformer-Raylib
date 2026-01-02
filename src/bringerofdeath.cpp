@@ -7,9 +7,9 @@ static AnimDef IDLE  = {0, 0, 8, 10};
 static AnimDef WALK  = {1, 0, 8, 10};
 static AnimDef ATTACK1  = {2, 0, 10, 10}; 
 static AnimDef HURT  = {3, 2, 3, 10}; 
-static AnimDef DEATH  = {3, 5, 10, 10}; 
-static AnimDef CAST  = {4, 7, 9, 10};  
-static AnimDef SPELL   = {6, 0, 16, 10};
+static AnimDef DEATH  = {3, 5, 10, 1}; 
+static AnimDef CAST  = {4, 7, 9, 4};  
+static AnimDef SPELL   = {6, 0, 16, 4};
 
 // Initialize static texture
 Texture2D Boss::sharedAtlas = {0};
@@ -51,10 +51,10 @@ Boss::Boss()
     walkAnim = LoadAnim(WALK, sharedAtlas, atlasInfo, true);
 
     position = { 1200.0f, 400.0f };
-    scale = 5.5f;
+    scale = 5.0f;
     width = (int)(textureWidth * scale);
     height = (int)(textureHeight * scale);
-    speed = 2;
+    speed = 1.5f;
     speedY = 0.0f;
     isOnGround = false;
     facingRight = false;
@@ -63,11 +63,13 @@ Boss::Boss()
     health = maxHealth;
     isDying = false;
     isDeadFinal = false;
+    castCooldown = 15.0f;
 
     state = State::Idle;
     lastState = State::Idle;
     animationStartTime = GetTime();
-
+    spellStartPos = {0.0f, 0.0f};
+    spellStarted = false;
 }
 
 Boss::Boss(Vector2 startPos) : Boss()
@@ -94,12 +96,13 @@ Rectangle Boss::GetRect() const
 Rectangle Boss::GetHitbox() const
 {
    // Use full standing height for collision to avoid flicker/jitter when crouching
-    float offsetX = 55.0f;
-    float offsetY = 75.0f;
-    float x = position.x + offsetX;
+    float offsetXleft = 84.0f * scale;
+    float offsetXright = 13.0f * scale;
+    float offsetY = 37.0f * scale;
+    float x = position.x + offsetXright;
     float y = position.y + offsetY;
-    float w = (float)width - offsetX*2;
-    float h = (float)height - offsetY*2;
+    float w = (float)width - offsetXleft - offsetXright;
+    float h = (float)height - offsetY;
    
     return Rectangle{x, y, w, h};
 }
@@ -128,6 +131,8 @@ bool Boss::CheckPlatformCollision(const std::vector<Platform>& platforms)
 void Boss::TakeDamage(float damageAmount)
 {
     if (isDying || isDeadFinal) return;
+    SetState(State::Hurt);
+    animationStartTime = GetTime();
     health -= damageAmount;
     if (health <= 0.0f) {
         health = 0.0f;
@@ -137,8 +142,6 @@ void Boss::TakeDamage(float damageAmount)
 
 void Boss::Update(const std::vector<Platform>& platforms, const std::vector<Wall>& walls, const Fighter& player)
 {
-    const float GRAVITY = 800.0f;
-    float dt = GetFrameTime();
     playerRectCache = player.GetHitbox();
 
     if (isDeadFinal) return;
@@ -146,7 +149,7 @@ void Boss::Update(const std::vector<Platform>& platforms, const std::vector<Wall
     if (isDying) {
         state = State::Die;
         float elapsed = GetTime() - animationStartTime;
-        if (elapsed >= (float)dieAnim.rectanglesCount / dieAnim.framesPerSecond) {
+        if (elapsed >= 10.0f) { // death animation lasts 10 seconds
             isDeadFinal = true;
         }
         return;
@@ -154,13 +157,56 @@ void Boss::Update(const std::vector<Platform>& platforms, const std::vector<Wall
 
     // Face player
     float playerCenterX = player.GetHitbox().x + player.GetHitbox().width * 0.5f;
-    float myCenterX = position.x + width * 0.5f;
+    float myCenterX = position.x + GetHitbox().width/2;
     facingRight = (playerCenterX <= myCenterX);
+
+    if(state == State::Hurt) {
+        float elapsed = GetTime() - animationStartTime;
+        if (elapsed >= 0.3f) { // hurt animation duration
+            SetState(State::Idle);
+        }
+        return;
+    }
+    else if(state == State::Attack1 || state == State::Cast) {
+        float animDuration = 0.0f;
+        switch(state) {
+            case State::Attack1:
+                animDuration = (float)attack1Anim.rectanglesCount / (float)attack1Anim.framesPerSecond;
+                break;
+            case State::Cast:
+                animDuration = (float)castAnim.rectanglesCount / (float)castAnim.framesPerSecond;
+                // Store spell starting position when cast starts
+                if (!spellStarted) {
+                    spellStartPos = {player.GetHitbox().x, player.GetHitbox().y};
+                    spellStarted = true;
+                    castTimer = 0.0f;  // Reset timer when cast begins
+                }
+                // Update cast timer for hitbox growth
+                castTimer += GetFrameTime();
+                break;
+            default:
+                break;
+        }
+        float elapsed = GetTime() - animationStartTime;
+        if (elapsed >= animDuration) {
+            SetState(State::Idle);
+            spellStarted = false; // Reset for next cast
+        }
+        return;
+    }
+    //after 15 seconds the boss will perform a cast attack
+    static float castTimer = 0.0f;
+    castTimer += GetFrameTime();
+    if (castTimer >= castCooldown) {
+        SetState(State::Cast);
+        castTimer = 0.0f;
+        return;
+    }
 
     // Simple AI: move toward player if not in attack range
     float distanceToPlayer = fabsf(playerCenterX - myCenterX);
     isOnGround = CheckPlatformCollision(platforms);
-    if (distanceToPlayer > 200.0f) {
+    if (distanceToPlayer > 150.0f) {
         // Move toward player
         if (!facingRight) {
             position.x += speed;
@@ -171,6 +217,7 @@ void Boss::Update(const std::vector<Platform>& platforms, const std::vector<Wall
     } else {
         // In range - attack
         SetState(State::Attack1);
+
     }
 }
 
@@ -179,13 +226,36 @@ void Boss::Draw()
     if (isDeadFinal) return;
     float elapsed = GetTime() - animationStartTime;
     Vector2 origin{0,0};
-    Rectangle dest = GetHitbox();
-    Rectangle dest2 = GetHitbox();
-    dest2.x = playerRectCache.x;
-    dest2.y = playerRectCache.y - 20.0f; // slightly above player
     
+    // Use full sprite rectangle for drawing to prevent visual jumping
+    Rectangle dest = GetRect();
+    
+    // Apply horizontal offset to compensate for asymmetric sprite when flipping
+    // Adjust this value based on how off-center the sprite is in the texture
+    float flipOffset = 380.0f; // Compensates for character position in texture
+    if (facingRight) {
+        dest.x -= flipOffset;
+    }
+    
+    // Draw spell at stored position (not following player)
+    Rectangle spellDest;
+    spellDest.x = spellStartPos.x - 100.0f;  // Match hitbox centering
+    spellDest.y = spellStartPos.y - 200.0f;  // Match hitbox offset
+    spellDest.width = 200.0f;   // Match hitbox width
+    spellDest.height = 300.0f;  // Match hitbox height
 
-    DrawRectangleLinesEx(dest, 1.0f, RED); // Debug: draw hitbox
+    // DrawRectangleLinesEx(GetHitbox(), 1.0f, RED); // Debug: draw hitbox
+    // DrawRectangleLinesEx(dest, 1.0f, YELLOW); // Debug: draw texture box
+    
+    // Draw attack hitboxes during Attack1 and Cast states
+    // if (state == State::Attack1) {
+    //     Rectangle attack1Hitbox = GetAttack1Hitbox();
+    //     DrawRectangleLinesEx(attack1Hitbox, 2.0f, ORANGE); // Debug: attack hitbox
+    // } else if (state == State::Cast) {
+    //     DrawRectangleLinesEx(spellDest, 2.0f, PURPLE); // Debug: spell hitbox
+    // }
+    // float myCenterX =position.x + GetHitbox().width/2; // adjust for sprite center
+    // DrawCircle(myCenterX, 250, 50.0f, RED); // Debug: draw center point
 
     switch (state) {
         case State::Attack1:
@@ -193,7 +263,7 @@ void Boss::Draw()
             break;
         case State::Cast:
             DrawSpriteAnimationPro(castAnim, dest, origin, 0.0f, WHITE, facingRight, elapsed);
-            DrawSpriteAnimationPro(spellAnim, dest2, origin, 0.0f, WHITE, facingRight, elapsed);
+            DrawSpriteAnimationPro(spellAnim, spellDest, origin, 0.0f, WHITE, facingRight, elapsed);
             break;
         case State::Hurt:
             DrawSpriteAnimationPro(hurtAnim, dest, origin, 0.0f, WHITE, facingRight, elapsed);
@@ -218,4 +288,64 @@ void Boss::SetState(State newState)
         animationStartTime = GetTime();
         lastState = newState;
     }
+}
+
+Rectangle Boss::GetAttack1Hitbox() const
+{
+    // Only active during Attack1 state
+    if (state != State::Attack1) {
+        return Rectangle{0, 0, 0, 0};
+    }
+
+    // Add 1 second buffer before hitbox spawns (use elapsed time from animation start)
+    float elapsed = GetTime() - animationStartTime;
+    if (elapsed < 0.5f) {
+        return Rectangle{0, 0, 0, 0};
+    }
+
+    Rectangle attack1Hitbox = GetHitbox();
+
+    // Facing logic: when facingRight is true, boss looks left (toward smaller X)
+    // Place the hitbox forward in the facing direction with a modest vertical offset
+    const float forwardWidth = 400.0f;
+    const float forwardOffset = 40.0f;
+    const float verticalOffset = -100.0f; // slightly upward so it covers chest/head
+
+    if (facingRight) {
+        // Attack to the left side
+        attack1Hitbox.x -= (forwardWidth + forwardOffset);
+    } else {
+        // Attack to the right side
+        attack1Hitbox.x += attack1Hitbox.width + forwardOffset;
+    }
+
+    attack1Hitbox.y += verticalOffset;
+    attack1Hitbox.width = forwardWidth;
+    attack1Hitbox.height = attack1Hitbox.height + 200.0f; // extend downward a bit
+
+    return attack1Hitbox;
+}
+
+Rectangle Boss::GetCastHitbox() const
+{
+    // Only return hitbox when in Cast state to prevent lingering
+    if (state != State::Cast) {
+        return Rectangle{0, 0, 0, 0};
+    }
+    
+    // Start with upper half (150px), grow to full height (300px) over 3 seconds
+    float upperHalfHeight = 150.0f;
+    float lowerHalfHeight = 150.0f;
+    float growthProgress = castTimer / 4.0f;  // 0.0 to 1.0 over 4 seconds
+    if (growthProgress > 1.0f) growthProgress = 1.0f;
+    
+    float currentLowerHeight = lowerHalfHeight * growthProgress;
+    float currentTotalHeight = upperHalfHeight + currentLowerHeight;
+    
+    Rectangle castHitbox;
+    castHitbox.x = spellStartPos.x - 100.0f;  // Center larger hitbox
+    castHitbox.y = spellStartPos.y - 200.0f;  // Offset upward for taller hitbox
+    castHitbox.width = 200.0f;   // Wider to overlap fighter
+    castHitbox.height = currentTotalHeight;  // Grows from 150px to 300px
+    return castHitbox;
 }

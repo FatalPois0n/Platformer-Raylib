@@ -62,7 +62,7 @@ Huntress::Huntress()
         (Rectangle){180, 0, 60, 20},
     }, 4, true);
 
-    position = { 1200.0f, (float)GetScreenHeight() - 400.0f };
+    position = { 250.0f, (float)GetScreenHeight() - 950.0f };
     scale = 2.5f;
     width = (int)(textureWidth * scale);
     height = (int)(textureHeight * scale);
@@ -80,7 +80,7 @@ Huntress::Huntress()
     directionChangeCooldown = 0.0f;
     directionChanges = 0;
 
-    maxHealth = 80.0f;
+    maxHealth = 75.0f;
     health = maxHealth;
     isDying = false;
     isDeadFinal = false;
@@ -166,6 +166,8 @@ void Huntress::TakeDamage(float damageAmount)
 {
     if (isDying || isDeadFinal) return;
     health -= damageAmount;
+    state = State::Hurt;
+    animationStartTime = GetTime();
     if (health <= 0.0f) {
         health = 0.0f;
         isDying = true;
@@ -223,6 +225,14 @@ void Huntress::Update(const std::vector<Platform>& platforms, const std::vector<
 
     float playerCenterX = player.GetHitbox().x + player.GetHitbox().width * 0.5f;
     float myCenterX = hitbox.x + hitbox.width * 0.5f;
+
+    if(state == State::Hurt) {
+        float elapsed = GetTime() - animationStartTime;
+        if (elapsed >= 0.3f) { // hurt animation duration
+            SetState(State::Idle);
+        }
+        return;
+    }
 
     // Attack3 timing and state machine
     if (state == State::Attack3) {
@@ -374,7 +384,7 @@ void Huntress::Draw()
     spearDest.x += facingRight ? GetHitbox().width : -20.0f;
     spearDest.y += dest.height * 0.4f;
 
-    DrawRectangleLinesEx(GetHitbox(), 1.0f, RED); // Debug: draw hitbox
+    // DrawRectangleLinesEx(GetHitbox(), 1.0f, RED); // Debug: draw hitbox
 
     switch (state) {
         // case State::Attack1:
@@ -411,7 +421,7 @@ void Huntress::Draw()
     for (const auto& spear : spears) {
         if (spear.alive) {
             DrawSpriteAnimationPro(spearAnim, spear.GetRect(), origin, 0.0f, WHITE, spear.speedX > 0.0f, elapsed);
-            DrawRectangleLinesEx(spear.GetRect(), 2.0f, YELLOW); // Debug: draw spear hitbox
+            // DrawRectangleLinesEx(spear.GetRect(), 2.0f, YELLOW); // Debug: draw spear hitbox
         }
     }
 

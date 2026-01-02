@@ -60,6 +60,7 @@ int main()
     Texture2D background = LoadTexture("resources/background/background_layer_1.png");
     Texture2D midground = LoadTexture("resources/background/background_layer_2.png");
     Texture2D foreground = LoadTexture("resources/background/background_layer_3.png");
+    Texture2D bossBG = LoadTexture("resources/background/awesomeCavePixelArt.png");
     Texture2D gameLogo = LoadTexture("resources/logo1a.png");
     Texture2D tileset = LoadTexture("resources/oak_woods_tileset.png");
     
@@ -100,6 +101,12 @@ int main()
     const char* CHEAT_PHRASE = "bigbang";
     const int CHEAT_LEN = 7;
     int cheatProgress = 0;
+
+    // Konami code: up, up, down, down, left, right, left, right, B, A
+    const int KONAMI_CODE[] = { KEY_UP, KEY_UP, KEY_DOWN, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_LEFT, KEY_RIGHT, KEY_X, KEY_Z };
+    const int KONAMI_LEN = 10;
+    int konamiProgress = 0;
+    bool konamiActivated = false;
 
     Color orange = { 255, 117, 0, (unsigned char)(0.67*255) };
     Color yellow = { 255, 214, 0, (unsigned char)(0.78*255) };
@@ -178,6 +185,7 @@ int main()
                 gameState = GameState::BossLevel;
                 // Initialize Boss level
                 fighter.resetPos();
+                fighter.speed = 7; //increased speed for boss level
                 ClearEnemies(enemies);
                 platforms.clear();
                 walls.clear();
@@ -218,6 +226,23 @@ int main()
             if (IsKeyDown(KEY_RIGHT) && masterVolume < 1.0f) {
                 masterVolume += 0.005f;
                 SetMasterVolume(masterVolume);
+            }
+        }
+
+        // Konami code detection
+        if (!volumeSliderActive && !konamiActivated) {
+            if (IsKeyPressed(KONAMI_CODE[konamiProgress])) {
+                konamiProgress++;
+                if (konamiProgress >= KONAMI_LEN) {
+                    // Konami code activated!
+                    konamiActivated = true;
+                    fighter.lives = 999;
+                    fighter.baseDamage = 1000.0f;
+                    fighter.comboDamage = 1000.0f;
+                }
+            } else if (IsKeyPressed(KEY_SPACE)) {
+                // Reset on wrong key
+                konamiProgress = 0;
             }
         }
 
@@ -293,6 +318,7 @@ int main()
             StopMusicStream(level1Music);
             StopMusicStream(level2Music);
             StopMusicStream(level3Music);
+            StopMusicStream(bossLevelMusic);
 
             ResumeMusicStream(gameOverMusic);
             if (!IsMusicStreamPlaying(gameOverMusic)) {
@@ -367,6 +393,13 @@ int main()
         
         // Update GameOver state
         if (gameState == GameState::GameOver) {
+            DrawRectangleGradientEx(
+                {0, 0, (float)screenWidth, (float)screenHeight},
+                RED,
+                ORANGE,
+                DARKGRAY,
+                MAROON
+            );
             gameOverTimer += GetFrameTime();      
             // text animation
             float targetY = (screenHeight - 120) / 2.0f;
@@ -469,30 +502,41 @@ int main()
         }
         else {
             // Draw background layers for gameplay and pause
-            DrawTexturePro(
-                background,
-                {0, 0, (float)background.width, (float)background.height},
-                {0, 0, (float)screenWidth, (float)screenHeight},
-                {0, 0},
-                0.0f,
-                WHITE
-            );
-            DrawTexturePro(
-                midground,
-                {0, 0, (float)midground.width, (float)midground.height},
-                {0, 0, (float)screenWidth, (float)screenHeight},
-                {0, 0},
-                0.0f,
-                WHITE
-            );
-            DrawTexturePro(
-                foreground,
-                {0, 0, (float)foreground.width, (float)foreground.height},
-                {0, 0, (float)screenWidth, (float)screenHeight},
-                {0, 0},
-                0.0f,
-                WHITE
-            );
+                DrawTexturePro(
+                    background,
+                    {0, 0, (float)background.width, (float)background.height},
+                    {0, 0, (float)screenWidth, (float)screenHeight},
+                    {0, 0},
+                    0.0f,
+                    WHITE
+                );
+                DrawTexturePro(
+                    midground,
+                    {0, 0, (float)midground.width, (float)midground.height},
+                    {0, 0, (float)screenWidth, (float)screenHeight},
+                    {0, 0},
+                    0.0f,
+                    WHITE
+                );
+                DrawTexturePro(
+                    foreground,
+                    {0, 0, (float)foreground.width, (float)foreground.height},
+                    {0, 0, (float)screenWidth, (float)screenHeight},
+                    {0, 0},
+                    0.0f,
+                    WHITE
+                );
+
+                if(gameState == GameState::BossLevel || gameState == GameState::GameWon) {
+                DrawTexturePro(
+                    bossBG,
+                    {0, 0, (float)bossBG.width, (float)bossBG.height},
+                    {0, 0, (float)screenWidth, (float)screenHeight},
+                    {0, 0},
+                    0.0f,
+                    WHITE
+                );
+            }
 
             // Draw all platforms
             for (auto& platform : platforms) {
@@ -506,8 +550,20 @@ int main()
             // HUD texts (only shown during gameplay & pause)
             if (gameState != GameState::Start && gameState != GameState::GameOver) {
             std::string livesCount = "Lives: " + std::to_string(fighter.lives);
-            std::string invin = "Invincibility timer: " + std::to_string(fighter.invincibilityTimer);
-
+            std::string invin;
+            if (gameState == GameState::Level1){
+                invin = "Stage 1";
+            }
+            else if (gameState == GameState::Level2){
+                invin = "Stage 2";
+            }
+            else if (gameState == GameState::Level3){
+                invin = "Stage 3";
+            }
+            else if (gameState == GameState::BossLevel){
+                invin = "Boss Level";
+            }
+        
             float fontSpacing = 3.0f;
 
             Vector2 textSize1 = MeasureTextEx(fnt_chewy, livesCount.c_str(), HUDfontSize, fontSpacing);
@@ -515,8 +571,41 @@ int main()
             DrawTextEx(fnt_chewy, livesCount.c_str(), textPosition1, HUDfontSize, fontSpacing, WHITE);
 
             Vector2 textSize2 = MeasureTextEx(fnt_chewy, invin.c_str(), HUDfontSize, fontSpacing);
-            Vector2 textPosition2 = {(float)screenWidth - textSize2.x, 20.0f };
+            Vector2 textPosition2 = {(float)screenWidth - textSize2.x - 50.0f, 20.0f };
             DrawTextEx(fnt_chewy, invin.c_str(), textPosition2, HUDfontSize, fontSpacing, WHITE);
+            
+            // Boss health bar for Boss Level
+            if (gameState == GameState::BossLevel) {
+                for (auto* enemy : enemies) {
+                    Boss* boss = dynamic_cast<Boss*>(enemy);
+                    if (boss && !boss->IsDead()) {
+                        float bossHealth = boss->GetHealth();
+                        float maxHealth = 500.0f; // Assuming boss max health is 500
+                        float healthPercent = bossHealth / maxHealth;
+                        
+                        // Boss health bar
+                        float barWidth = 900.0f;
+                        float barHeight = 8.0f;
+                        float barX = (screenWidth - barWidth) / 2.0f;
+                        float barY = 120.0f;
+    
+                        // Background bar (red)
+                        DrawRectangle(barX, barY, barWidth, barHeight, DARKGRAY);
+                        // Health bar (green to red gradient based on health)
+                        Color healthColor = healthPercent > 0.5f ? GREEN : (healthPercent > 0.25f ? YELLOW : RED);
+                        DrawRectangle(barX, barY, barWidth * healthPercent, barHeight, healthColor);
+                        DrawRectangleLines(barX, barY, barWidth, barHeight, WHITE);
+                        
+                        // Boss name
+                        const char* bossName = "BRINGER OF DEATH";
+                        Vector2 bossNameSize = MeasureTextEx(fnt_chewy, bossName, HUDfontSize * 1.75f, fontSpacing);
+                        Vector2 bossNamePos = { barX + (barWidth - bossNameSize.x) / 2.0f, barY - bossNameSize.y - 5.0f };
+                        DrawTextEx(fnt_chewy, bossName, bossNamePos, HUDfontSize * 1.75f, fontSpacing, RED);
+                        
+                        break; // Only draw for first boss found
+                    }
+                }
+            }
             }
 
             // Draw Character and enemies
@@ -590,6 +679,7 @@ int main()
     UnloadTexture(background);
     UnloadTexture(midground);
     UnloadTexture(foreground);
+    UnloadTexture(bossBG);
     UnloadTexture(gameLogo);
     UnloadTexture(tileset);
     UnloadMusicStream(menuMusic);
@@ -629,12 +719,12 @@ void SpawnLevel2Enemies(std::vector<Enemy*>& enemies, int screenWidth, int scree
 }
 void SpawnLevel3Enemies(std::vector<Enemy*>& enemies, int screenWidth, int screenHeight) {
     // Level 3: 2 huntresses
-    enemies.push_back(new Huntress({250.0f, (float)screenHeight - 825.0f}));
-    enemies.push_back(new Huntress({screenWidth - 250.0f, (float)screenHeight - 825.0f}));
+    enemies.push_back(new Huntress({250.0f, (float)screenHeight - 950.0f}));
+    enemies.push_back(new Huntress({screenWidth - 250.0f, (float)screenHeight - 950.0f}));
     
 }
 void SpawnBossLevelEnemies(std::vector<Enemy*>& enemies, int screenWidth, int screenHeight) {
-    enemies.push_back(new Boss({1500.0f, (float)screenHeight - 200.0f}));
+    enemies.push_back(new Boss({1500.0f, (float)screenHeight - 538.0f}));
 }
 
 void CreateLevel1Platforms(std::vector<Platform>& platforms, int screenWidth, int screenHeight, int groundHeight) {
@@ -712,5 +802,17 @@ void CreateBossLevelPlatforms(std::vector<Platform>& platforms, std::vector<Wall
     platforms.push_back(Platform(0, screenHeight - groundHeight, screenWidth, groundHeight, true));
     
     // Boss level specific platforms - tall walls on sides and central elevated platform
+
+    platforms.push_back(Platform(0, screenHeight - groundHeight - (160*1), 200, 40, false));
+    platforms.push_back(Platform(0, screenHeight - groundHeight - (160*2), 200, 40, false));
+    platforms.push_back(Platform(0, screenHeight - groundHeight - (160*3), 200, 40, false));
+    platforms.push_back(Platform(0, screenHeight - groundHeight - (160*4), 200, 40, false));
+
+    platforms.push_back(Platform(screenWidth - 200, screenHeight - groundHeight - (160*1), 200, 40, false));
+    platforms.push_back(Platform(screenWidth - 200, screenHeight - groundHeight - (160*2), 200, 40, false));
+    platforms.push_back(Platform(screenWidth - 200, screenHeight - groundHeight - (160*3), 200, 40, false));
+    platforms.push_back(Platform(screenWidth - 200, screenHeight - groundHeight - (160*4), 200, 40, false));
+
+    platforms.push_back(Platform(300, screenHeight - (160*5), screenWidth - 600, 40, false));
 
 }

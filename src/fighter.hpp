@@ -21,9 +21,13 @@ class Fighter {
     void PerformSlash(Enemy& enemy);
     void PerformComboSlash(Enemy& enemy);
     bool IsAttacking() const { return isAttacking || comboAttack; }
+    
     int lives;
     float invincibilityTimer;
     bool comboAttack;
+    float baseDamage;
+    float comboDamage;
+    int speed;
     
     private:
     Texture2D fighterSet1;
@@ -45,7 +49,6 @@ class Fighter {
     int height;
     float textureWidth;
     float textureHeight;
-    int speed;
     float speedY;
     float attackDuration;
     float comboDuration;
@@ -67,8 +70,6 @@ class Fighter {
     float deathTimer;
     
     // Damage system
-    float baseDamage;
-    float comboDamage;
     bool hasDealtDamage; // Track if damage was dealt this attack to prevent multiple hits
     float attackHitboxDelay; // Delay before attack hitbox becomes active (1 second)
     
