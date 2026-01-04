@@ -1,8 +1,7 @@
 Graphics
 
-Areeba Ghafoor
+Areeba Ghafoor (logo design)
 Brullov Art (bg , platforms and fighter character assets)
-BDragon1727 (bullet assets)
 --------------------
 Developer
 
@@ -12,7 +11,5 @@ Music
 
 Toby fox
 Rush E by Fanchen
-NaughtZero Music
-C418
 Xasthur
 hkmori
